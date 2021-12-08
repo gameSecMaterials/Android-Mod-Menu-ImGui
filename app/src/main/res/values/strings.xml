@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="UnsatisfiedLinkErrorReinstallPrompt">We have detected that {GAME} has not been installed successfully. Please uninstall and redownload from Play Store.</string>
+</resources>
