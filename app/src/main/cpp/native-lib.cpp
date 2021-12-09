@@ -325,6 +325,7 @@ static int GetAssetData(JNIEnv*env, const char* filename, void** outData)
 #include "tabs.h"
 void logEgl()// Initialize EGL
 // This is mostly boilerplate code for EGL...
+//This function its just a EGL test so it did almost nothing and you can undefine it.
 {
     g_EglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (g_EglDisplay == EGL_NO_DISPLAY){
@@ -370,24 +371,23 @@ void logEgl()// Initialize EGL
 }
 
 bool setupGraphics(int w, int h) {
-
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    // Disable loading/saving of .ini file from disk.
-    // FIXME: Consider using LoadIniSettingsFromMemory() / SaveIniSettingsToMemory() to save in appropriate location for Android.
-    ozTheme();
-    ImGui_ImplAndroidGLES2_Init();
     ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename =    nullptr;
+    ImGui::StyleColorsDark();
+    ozTheme();
     ImGui::GetStyle().WindowRounding = 10;
-  //  ImGui::GetStyle().ItemSpacing = ImVec2(10,10);
     ImGui::GetStyle().Alpha = 1;
     ImGui::GetStyle().WindowMinSize = ImVec2(200,200);
-    io.BackendPlatformName = "imgui_impl_android";
+    io.BackendPlatformName = ozObfuscate("imgui_impl_android");
+    // Disable loading/saving of .ini file from disk.
+    // FIXME: Consider using LoadIniSettingsFromMemory() / SaveIniSettingsToMemory() to save in appropriate location for Android.
+    io.IniFilename =  nullptr;
 
-    // Keyboard mapping. Dear ImGui will use those indices to peek into the io.KeysDown[] array.
+    ImGui_ImplAndroidGLES2_Init();
+
+    // Setup keyboard input
     io.KeyMap[ImGuiKey_Tab] = AKEYCODE_TAB;
     io.KeyMap[ImGuiKey_LeftArrow] = AKEYCODE_DPAD_LEFT;   // also covers physical keyboard arrow key
     io.KeyMap[ImGuiKey_RightArrow] = AKEYCODE_DPAD_RIGHT; // also covers physical keyboard arrow key
@@ -411,69 +411,38 @@ bool setupGraphics(int w, int h) {
     io.KeyMap[ImGuiKey_Y] = AKEYCODE_Y;
     io.KeyMap[ImGuiKey_Z] = AKEYCODE_Z;
 
-    imClearColor = ImColor(114, 144, 154);
-    showTestWindow = false;
-    showAnotherWindow = false;
-    //glViewport(0, 0, w, h);
-    printGLString("Version", GL_VERSION);
-    printGLString("Vendor", GL_VENDOR);
-    printGLString("Renderer", GL_RENDERER);
-    printGLString("Extensions", GL_EXTENSIONS);
-
-    LOGI("setupGraphics(%d, %d)", w, h);
-    // We load the default font with increased size to improve readability on many devices with "high" DPI.
-    // FIXME: Put some effort into DPI awareness.
-    // Important: when calling AddFontFromMemoryTTF(), ownership of font_data is transfered by Dear ImGui by default (deleted is handled by Dear ImGui), unless we set FontDataOwnedByAtlas=false in ImFontConfig
-
-    io.IniFilename =    nullptr;
-    ImGui::GetStyle().WindowRounding = 10;
-    //  ImGui::GetStyle().ItemSpacing = ImVec2(10,10);
-    ImGui::GetStyle().Alpha = 1;
-    ImGui::GetStyle().WindowMinSize = ImVec2(200,200);
-    io.BackendPlatformName = "imgui_impl_android";
     ImGui::GetStyle().ScaleAllSizes(3);
     ImFontConfig font_cfg;
     font_cfg.SizePixels = 22.0f;
     font_cfg.GlyphRanges = io.Fonts->GetGlyphRangesCyrillic();
     io.Fonts->AddFontDefault(&font_cfg);
-    /*
-    gProgram = createProgram(gVertexShader, gFragmentShader);
-    if (!gProgram) {
-        LOGE("Could not create program.");
-        return false;
-    }
-    gvPositionHandle = glGetAttribLocation(gProgram, "vPosition");
-    checkGlError("glGetAttribLocation");
-    LOGI("glGetAttribLocation(\"vPosition\") = %d\n",
-         gvPositionHandle);
-    */
 
+    //setup GL drawing
     glGenBuffers(1, &vbo);
     checkGlError("glGenBuffer");
+
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     checkGlError("glBindBuffer");
+
     glBufferData(GL_ARRAY_BUFFER, 6*sizeof(GLfloat), gTriangleVertices, GL_STATIC_DRAW);
     checkGlError("glBufferData");
+
     glVertexAttribPointer(gvPositionHandle, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid*)nullptr);
     checkGlError("glVertexAttribPointer");
+
     glEnableVertexAttribArray(gvPositionHandle);
     checkGlError("glVertexAttribArray");
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     checkGlError("glBindBuffer");
+
     glViewport(0,0,w,h);
+
     return true;
 }
 
 
-float getx()
-{
-    return ImGui::GetContentRegionAvail().x;
-}
 
-float gety()
-{
-    return ImGui::GetContentRegionAvail().y;
-}
 
 void button(const char* label, int& currentTab, int newTab, ImVec2 size)
 {
@@ -893,51 +862,49 @@ DrawESPElement(ImDrawList *list,ImVec2 fromWhere, const char *name, ImColor elCl
     if(ESP.Texts){
         list->AddText(ImGui::GetFont(), ESP.textSize, ImVec2(toWhere.x-60, toWhere.y + 10), enableBg ? ImColor(elClr.Value.x/2.f, elClr.Value.y/2.f, elClr.Value.z/2.f, 1.0f) : elClr, name, nullptr, 0.0f, nullptr);
         list->AddText(ImGui::GetFont(), ESP.textSize, ImVec2(toWhere.x-150, toWhere.y + 410), enableBg ? ImColor(elClr.Value.x, elClr.Value.y, elClr.Value.z, 1.0f) : elClr, dstr, nullptr, 0.0f, nullptr);
-
     }
-
 }
-void Render(){
-    ImGuiIO& io = ImGui::GetIO();
-
-    if(!ImGui::get_cmdExecutorHaveVal()){
-        ImGui::set_cmdExecutor(&cmdExecuteSystem);
-    }
-    //Creating A new ImGui Frame for our backend
-    ImGui_ImplAndroidGLES2_NewFrame(screenWidth, screenHeight, currentTimeInMilliseconds()-startTime);
+//btw void* and void * does not have diffrence.
+ImDrawList* getDrawList(){
     ImDrawList *drawList;
     if(ESP.drawBehindMenu){
         drawList = ImGui::GetBackgroundDrawList();
     } else {
         drawList = ImGui::GetForegroundDrawList(ImGui::GetMainViewport());
     }
+}
 
-    drawList->AddText(ImGui::GetFont(), 30, ImVec2(100.f, 100.f), ImColor(255, 255, 0, 255), "Player Stats.", 0, 0.0f, nullptr);
-
+void RenderESPSummary(){
     if (!ESP.enemies.empty() && ESP.ESP) {
         for (int i = 0; i < ESP.enemies.size(); i++) {
             ESPEnemy *me = ESP.enemies[i];
             if(me->ESP && me->screenPosition.x > 0){
                 if(i==3 && me->physicalPosition.x == 0 ){
-
-                    drawList->AddText(ImGui::GetFont(), 30, ImVec2(0,0), ImColor(255, 255, 0, 255), "Can't find Slendrina!", 0, 0.0f, nullptr);
-
+                    getDrawList()->AddText(ImGui::GetFont(), 30, ImVec2(0,0), ImColor(255, 255, 0, 255), "Can't find Slendrina!", 0, 0.0f, nullptr);
                 } else {
-                    DrawESPElement(drawList, ImVec2(screenWidth / 2, ESP.lineOffsetY), me->name, me->color,
+                    DrawESPElement(getDrawList(), ImVec2(screenWidth / 2, ESP.lineOffsetY), me->name, me->color,
                                    me->screenPosition, ESP.boxBg,1, me->distance);
                 }
             }
-
-
-
         }
     }
-    //DrawESPElement(ImVec2(screenWidth / 2, 0), "Grandpa", ImColor(0, 255, 0, 255), ImVec2(ImVec2((screenWidth / 2) + 450, screenHeight / 2)), true, ImVec2(0,0), 0);
+}
+//Render the menu
+void Render(){
+    ImGuiIO& io = ImGui::GetIO();
+    if(!ImGui::get_cmdExecutorHaveVal()){
+        ImGui::set_cmdExecutor(&cmdExecuteSystem);
+    }
+    //Creating A new ImGui Frame for our backend
+    ImGui_ImplAndroidGLES2_NewFrame(screenWidth, screenHeight, currentTimeInMilliseconds()-startTime);
+    ImDrawList* drawList = getDrawList();
+    //Example using text over screen
+    drawList->AddText(ImGui::GetFont(), 30, ImVec2(100.f, 100.f), ImColor(255, 255, 0, 255), "Player Stats.", 0, 0.0f, nullptr);
 
-    //DrawESPElement(ImVec2(screenWidth / 2, 0), "Slendrina", ImColor(0, 0, 255, 255), ImVec2(ImVec2((screenWidth / 2) - 450, screenHeight / 2)), true);
+    //Rendering ESP
+    getDrawList();
 
-    // 3. Show the ImGui test window. Most of the sample code is in ImGui::ShowTestWindow()
-//1200
+    //Open animation
     if(ImGui::get_openAnimationState() < 1200){
 
         ImGui::set_openAnimationState(ImGui::get_openAnimationState()+60);
@@ -945,15 +912,13 @@ void Render(){
     if(ImGui::get_openAnimationState() > 1200){
         ImGui::set_openAnimationState(1200);
     }
+    //Set Animation to window
 
     ImGui:: SetNextWindowSize(ImVec2(ImGui::get_openAnimationState(),488));
-    //  ImGui::GetCurrentWindow()->SizeFull.x = ImGui::get_openAnimationState()
     std::string wName = std::string(ozObfuscate("Mod Menu for ")) + GAME_NAME + "(" + GAME_VER + ")" + std::string(ozObfuscate(" - by ozMod"));
     ImGui::Begin( wName.c_str(), nullptr, ImGuiWindowFlags_MenuBar |
 
                                                                                     ImGuiWindowFlags_AlwaysAutoResize);
-
-
     if (ImGui::BeginMenuBar())
     {
         if (ImGui::BeginMenu(ozObfuscate("Tools")))
@@ -1106,7 +1071,7 @@ void Render(){
         }
         ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(0, 0, 0, 0));
 
-        if (ImGui::ListBoxHeader("##ResourcesList", ImVec2(getx()+20, gety())))
+        if (ImGui::ListBoxHeader("##ResourcesList", ImVec2(ImGui::GetContentRegionAvail().x + 20, ImGui::GetContentRegionAvail().y)))
         {
             if(Settings::Tab == 3){
                 if(ImGui::SliderFloat("Time Scale", &timescale, 0, 5) && set_timeScale){
@@ -1286,6 +1251,7 @@ Java_androidx_viewbinding_systemui_SystemOverlaySurface_onSurfaceCreated(JNIEnv 
     setupGraphics( screenWidth, screenHeight);
     //activity = env->NewGlobalRef(ctx);
 }
+
 bool pauseSurface = false;
 extern "C"
 JNIEXPORT void JNICALL
@@ -1295,6 +1261,7 @@ Java_androidx_viewbinding_systemui_SystemOverlaySurface_onDrawFrame(JNIEnv *env,
      if(pauseSurface){
         return;
     }
+
     UpdateInput();
     UpdateKeyboardInput(env); // Calling it every frame to get keyboard inputs...
     ImGuiIO& io = ImGui::GetIO();
@@ -1303,6 +1270,7 @@ Java_androidx_viewbinding_systemui_SystemOverlaySurface_onDrawFrame(JNIEnv *env,
         ShowSoftKeyboardInput(env);
     }
     WantTextInputLast = io.WantTextInput;
+
     Render();
 }
 extern "C"
@@ -1330,7 +1298,6 @@ int getSurfaceGravity() {
     return 8388659;
 }
 
-
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_androidx_viewbinding_systemui_SystemOverlaySurface_onTouchEvent(JNIEnv *env, jobject thiz,
@@ -1346,16 +1313,13 @@ Java_androidx_viewbinding_systemui_SystemOverlaySurface_Start(JNIEnv *env, jclas
 
         Surface.Start(env, activityContextArg, player);
 }
-
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_androidx_viewbinding_systemui_SystemOverlaySurface_dispatchKeyEvent(JNIEnv *env, jobject thiz,
                                                                          jobject e) {
     // TODO: implement dispatchKeyEvent()
-    return Surface.dispacthKeyEvent(env, e);
+    return Surface.dispatchKeyEvent(env, e);
 }
-
-
 
 extern "C"
 JNIEXPORT jint JNICALL

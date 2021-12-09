@@ -54,13 +54,13 @@ struct EnemyEditor {
     void Init(){
 
         Enemy * enemy = AddEnemy();
-        enemy->name = "Granny";
+        enemy->name = ozObfuscate("Granny");
         enemy->color = ImColor(255, 0,0,255);
         Enemy * enemy1 = AddEnemy();
-        enemy1->name = "Grandpa";
+        enemy1->name = ozObfuscate("Grandpa");
         enemy1->color = ImColor(0, 255,0,255);
         Enemy * enemy2 = AddEnemy();
-        enemy2->name = "Slendrina";
+        enemy2->name = ozObfuscate("Slendrina");
         enemy2->color = ImColor(0, 0,255,255);
 
     }
@@ -87,13 +87,13 @@ struct ESP{
     }
     void Init(){
         ESPEnemy * enemy = AddEnemy();
-        enemy->name = "Granny";
+        enemy->name = ozObfuscate("Granny");
         enemy->color = ImColor(255, 0,0,255);
         ESPEnemy * enemy1 = AddEnemy();
-        enemy1->name = "Grandpa";
+        enemy1->name = ozObfuscate("Grandpa");
         enemy1->color = ImColor(0, 255,0,255);
         ESPEnemy * enemy2 = AddEnemy();
-        enemy2->name = "Slendrina";
+        enemy2->name = ozObfuscate("Slendrina");
         enemy2->color = ImColor(0, 0,255,255);
     }
 
@@ -189,21 +189,21 @@ void set_orthographic(void* instance, bool value){
     if(!il2cpp_resolve_icall_0){
         return;
     }
-    ((void (*)(void*, bool))il2cpp_getMethod("UnityEngine.Camera::set_orthographic(System.Boolean)"))(instance, value);
+    ((void (*)(void*, bool))il2cpp_getMethod(ozObfuscate("UnityEngine.Camera::set_orthographic(System.Boolean)")))(instance, value);
 }
 //Signature
 void set_fieldOfView(void* instance, float value){
     if(!il2cpp_resolve_icall_0){
         return;
     }
-                ((void (*)(void*, float))il2cpp_getMethod( "UnityEngine.Camera::set_fieldOfView(System.Single)"))(instance, value);
+                ((void (*)(void*, float))il2cpp_getMethod( ozObfuscate("UnityEngine.Camera::set_fieldOfView(System.Single)")))(instance, value);
 }
 
 void set_orthographicSize(void*instance, float value){
     if(!il2cpp_resolve_icall_0){
         return;
     }
-    ((void (*)(void*, float))il2cpp_getMethod( "UnityEngine.Camera::set_orthographicSize(System.Single)"))(instance, value);
+    ((void (*)(void*, float))il2cpp_getMethod( ozObfuscate("UnityEngine.Camera::set_orthographicSize(System.Single)")))(instance, value);
 
 }
 void set_nearClipPlane(void*instance, float value){

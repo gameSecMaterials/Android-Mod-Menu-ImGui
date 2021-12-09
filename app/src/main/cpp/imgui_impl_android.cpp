@@ -408,10 +408,6 @@ void ImGui_ImplAndroidGLES2_NewFrame(int width, int height, unsigned int millis)
 	if (!g_FontTexture){
 		ImGui_ImplAndroidGLES2_CreateDeviceObjects();
 	}
-
-
-
-
 	// Setup display size (every frame to accommodate for window resizing)
 	//int w, h;
 	//SDL_GetWindowSize(g_Window, &w, &h);
