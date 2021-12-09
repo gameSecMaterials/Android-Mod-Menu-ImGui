@@ -11,7 +11,8 @@
    
    in place of androidx/viewbinding/systemui/SystemOverlaySurface you need to put own package name if you renamed it.
    
-   put it here ![image](https://user-images.githubusercontent.com/80401984/145403251-e7d1ae29-47ac-411b-93d5-e3861894cfc6.png)
+   Put the line above here (under ```invoke-virtual {p1}, Lcom/unity3d/player/UnityPlayer;->requestFocus()Z```):
+   ![image](https://user-images.githubusercontent.com/80401984/145403251-e7d1ae29-47ac-411b-93d5-e3861894cfc6.png)
  
 # Recomendations
 
