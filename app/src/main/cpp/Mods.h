@@ -2,7 +2,7 @@
 // Created by ozMod on 27.11.2021.
 //
 
-#define targetLibName OBFUSCATE("libil2cpp.so")
+#define targetLibName ozObfuscate("libil2cpp.so")
 
 void *get_il2cpp() {
     void *mod = 0;
@@ -23,7 +23,8 @@ struct ESPEnemy {
     int id = -1;
     ImColor color;
     void * object;
-    ImVec2 screenPosition, boxSize = ImVec2(0,0);
+    float boxSize;
+    ImVec2 screenPosition;
     ImVec4 physicalPosition, physicalSize;
     float distance;
 };
@@ -34,11 +35,40 @@ struct Enemy {
     void * object;
     ImVec4 physicalPosition, physicalSize;
     float distance;
+    bool playAs;
+    bool active, destroy,destroyed;
+    bool setActive;
+    bool tpMe2Enemy,tpEnemy2Me;
+    bool enemyKillPlayer;
 };
 struct EnemyEditor {
     std::vector<Enemy *> enemies;
+    int lastEnemyId = -1;
+    Enemy * AddEnemy(){
+        Enemy * enemy = new Enemy();
+        lastEnemyId ++;
+        enemy->id = lastEnemyId;
+        enemies.push_back(enemy);
+        return enemy;
+    }
+    void Init(){
 
+        Enemy * enemy = AddEnemy();
+        enemy->name = "Granny";
+        enemy->color = ImColor(255, 0,0,255);
+        Enemy * enemy1 = AddEnemy();
+        enemy1->name = "Grandpa";
+        enemy1->color = ImColor(0, 255,0,255);
+        Enemy * enemy2 = AddEnemy();
+        enemy2->name = "Slendrina";
+        enemy2->color = ImColor(0, 0,255,255);
+
+    }
 }EnemyEditor;
+int selectedEnemyESP;
+ESPEnemy* selectedEnemyESPObj;
+int selectedEnemyGame;
+Enemy* selectedEnemyObj;
 struct ESP{
     bool drawBehindMenu=true;
 
@@ -204,7 +234,8 @@ void *Camera_main(){
     }
     return result();
 }
-
+void (*Destroy)(void* obj);
+void (*SetActive)(void*,bool value);
 void *(*StartCoroutine)(void * t, void *);
 void *(*get_gameObject)(void * t);
 void (*SetQualityLevel)(int, bool);
@@ -366,9 +397,8 @@ void GrannyESP(void * granny, void * player){
             }//  проверка чтоб не рисовало за экраном
             enemy->distance = UnityEngine_Vector3__Distance(cpos, cposG);
             //enemy->screenPosition = ImVec2(-999, -999);
-            enemy->screenPosition = ImVec2( fm.x - 150 + enemy->distance, (screenHeight - fm.y) - (30+400) + enemy->distance);
-             enemy->boxSize.x = 150 - (enemy->distance * 2);
-            enemy->boxSize.y = 250 - (enemy->distance * 2);
+            enemy->screenPosition = ImVec2( fm.x - 150, (screenHeight - fm.y) - (30+400) );
+
 
         }
 
@@ -411,9 +441,8 @@ void GrandpaESP(void * grandpa, void * player){
             }//  проверка чтоб не рисовало за экраном
             enemy->distance = UnityEngine_Vector3__Distance(cpos, cposG);
             //enemy->screenPosition = ImVec2(-999, -999);
-            enemy->screenPosition = ImVec2( fm.x - 150  + enemy->distance, (screenHeight - fm.y) - (30+400)  + enemy->distance);
-            enemy->boxSize.x = 150- (enemy->distance * 2);
-            enemy->boxSize.y = 250- (enemy->distance * 2);
+            enemy->screenPosition = ImVec2( fm.x - 150 , (screenHeight - fm.y) - (30+400) );
+
 
         }
 
@@ -457,9 +486,7 @@ void SlendrinaESP(void * slend, void * player){
 
             //enemy->screenPosition = ImVec2(-999, -999);
             enemy->distance = UnityEngine_Vector3__Distance(cpos, cposG);
-            enemy->screenPosition = ImVec2( fm.x - 150 + enemy->distance, (screenHeight - fm.y) - (30+400) + enemy->distance );
-            enemy->boxSize.x = 150 - (enemy->distance * 2);
-            enemy->boxSize.y = 250 - (enemy->distance * 2);
+            enemy->screenPosition = ImVec2( fm.x - 150, (screenHeight - fm.y) - (30+400) );
 
         }
 
@@ -472,6 +499,16 @@ void FPSControllerNEW_FixedUpdate(void *instance) {
         return;
     }
     void *granny = *(void **) ((uint64_t) instance + 0xA0); //Объект бабки)
+    Enemy* enemy = EnemyEditor.enemies[0];
+    if(enemy){
+        if(enemy->setActive){
+            if(granny){
+                SetActive(granny, enemy->active);
+            }
+            enemy->setActive = false;
+        }
+    }
+
     void *player = *(void **) ((uint64_t) instance + 0x80); //Объект игрока
     void *grandpa = *(void **) ((uint64_t) instance + 0xA4); //Объект деда) )
     if(changeForwSpeed){
@@ -595,6 +632,68 @@ void Slendrina_FixedUpdate(void *instance) {
     if (!slCantAttack){
         old_Slendrina_FixedUpdate(instance);
     }
+
+}
+void (*old_Granny_FixedUpdate)(void *instance);
+
+void Granny_FixedUpdate(void *instance) {
+
+    if (instance == nullptr) {
+
+       return;
+    }
+    Enemy* enemy = EnemyEditor.enemies[0];
+    if(enemy){
+       if(enemy->enemyKillPlayer){
+           *(bool *) ((uint64_t) instance + 0x100) = true;
+           *(bool *) ((uint64_t) instance + 0xED) = false;
+           StartCoroutine(instance, old_EnemyAIGranny_PC(instance));
+           enemy->enemyKillPlayer = false;
+       }
+        if(enemy->tpEnemy2Me){
+             void*Player = *(void* *) ((uint64_t) instance + 0x60);
+             if(Player){
+                 void*Granny = get_gameObject(instance);
+                 if(Granny){
+                     void*Granny_transform = get_transform(Granny);
+                     if(Granny_transform){
+                         set_pos(Player,get_pos(Granny_transform));
+                     }
+
+                 }
+             }
+            enemy->tpEnemy2Me = false;
+        }
+        if(enemy->tpMe2Enemy){
+            void*Player = *(void* *) ((uint64_t) instance + 0x60);
+            if(Player){
+                void*Granny = get_gameObject(instance);
+                if(Granny){
+                    void*Granny_transform = get_transform(Granny);
+                    void*Player_transform = get_transform(Player);
+                    if(Granny_transform){
+                        set_pos(Granny,get_pos(Player_transform));
+                    }
+
+                }
+            }
+            enemy->tpMe2Enemy = false;
+        }
+
+        if(enemy->destroy){
+
+            void*Granny = get_gameObject(instance);
+            if(Granny){
+               Destroy(Granny);
+            }
+            enemy->destroy = false;
+        }
+    }
+    if (grInvis || allInvis){
+        *(bool *) ((uint64_t) instance + 0xA4) = false;
+    }
+    LOGI("Granny_FixedUpdate");
+        old_Granny_FixedUpdate(instance);
 
 }
 void ozHookSym(void *pVoid, void *pVoid1, void **pVoid2) {
@@ -746,7 +845,7 @@ int DiffDataInvis(void * , int ){
     return 4;
 }
 void HookMods(){
-
+    selectedEnemyObj = EnemyEditor.enemies[0];
    // LogShaders();
     Wireframe();
     //Initialize IL2CPP Methods to non-offset use.
@@ -772,6 +871,8 @@ void HookMods(){
 
     //Game Utilities
     SetQualityLevel= (void(*)(int, bool)) getAbsoluteAddress(targetLibName, 0x94EDC8);
+    SetActive = (void(*)(void*, bool)) getAbsoluteAddress(targetLibName, 0x96A654);
+    Destroy = (void(*)(void*)) getAbsoluteAddress(targetLibName, 0x949864);
 
     StartCoroutine = (void*(*)(void*, void*)) getAbsoluteAddress(targetLibName, 0x94820C);
     //Camera_main  =  (void *(*)()) getAbsoluteAddress(targetLibName, 0x962630);
@@ -794,9 +895,9 @@ void HookMods(){
    //CharacterController_set_radius = (void (*)(void *, float ))getAbsoluteAddress("libil2cpp.so" ,0xEAB82C); // CharacterController$$set_radius
 
     //Game
-    MSHookFunction((void *) (int (*)())il2cpp_getMethod("UnityEngine.PlayerPrefs::GetInt(System.String,System.Int32)"),
-                   (void *) DiffDataInvis,
-                   (void **) &old_DiffDataInvis);
+  //  MSHookFunction((void *) (int (*)())il2cpp_getMethod("UnityEngine.PlayerPrefs::GetInt(System.String,System.Int32)"),
+    //               (void *) DiffDataInvis,
+    //               (void **) &old_DiffDataInvis);
     MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x698E44),
                    (void *) BearTrap_OnTriggerEnter, (void **) &old_BearTrap_OnTriggerEnter);
    // MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x59E894),
@@ -811,7 +912,9 @@ void HookMods(){
     MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x5A7B24),
                    (void *) Slendrina_FixedUpdate,
                    (void **) &old_Slendrina_FixedUpdate);
-
+    MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x59E894),
+                   (void *) Granny_FixedUpdate,
+                   (void **) &old_Granny_FixedUpdate);
     MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x5AF7F0),
                    (void *) FPSControllerNEW_FixedUpdate,
                    (void **) &old_FPSControllerNEW_FixedUpdate);
@@ -821,7 +924,7 @@ void HookMods(){
 void* thread(void* obj){
     //Initialize ESP Enemies.
     ESP.Init();
-
+    EnemyEditor.Init();
     glHandle = get_GL();
     eglHandle = get_EGL();
     //ImGuiImpl();

@@ -1,67 +1,225 @@
-#ifndef CRYPTOSYSTEM_HPP
-#define CRYPTOSYSTEM_HPP
+/* --------------------------------- ABOUT -------------------------------------
 
-#include <array>
-#include "meta_random.hpp"
+Original Author: Adam Yaxley (i just renamed some things but not created obfuscate so he is a author)
+Website: https://github.com/adamyaxley
+License: See end of file
 
-namespace ozModObfuscator {
+Obfuscate
+Guaranteed compile-time string literal obfuscation library for C++14
 
-	template <int A, int B>
-	struct ExtendedEuclidian { enum { 
-		d = ExtendedEuclidian<B, A % B>::d,
-		x = ExtendedEuclidian<B, A % B>::y,
-		y = ExtendedEuclidian<B, A % B>::x - (A/B) * ExtendedEuclidian<B, A % B>::y
-	}; };
+Usage:
+Pass string literals into the ozObfuscate macro to obfuscate them at compile
+time. ozObfuscate returns a reference to an ay::oz_encryptedSegment object with the
+following traits:
+	- Guaranteed obfuscation of string
+	The passed string is encrypted with a simple XOR cipher at compile-time to
+	prevent it being viewable in the binary image
+	- Global lifetime
+	The actual instantiation of the ay::oz_encryptedSegment takes place inside a
+	lambda as a function level static
+	- Implicitly convertable to a char*
+	This means that you can pass it directly into functions that would normally
+	take a char* or a const char*
 
-	template <int A>
-	struct ExtendedEuclidian<A, 0> { enum { 
-		d = A,
-		x = 1,
-		y = 0
-	}; };
+Example:
+const char* obfuscated_string = ozObfuscate("Hello World");
+std::cout << obfuscated_string << std::endl;
 
-	constexpr std::array<int, 30> PrimeNumbers = {
-		2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 
-		31, 37, 41, 43, 47, 53, 59, 61, 67,
-		71, 73, 79, 83, 89, 97, 101, 103, 
-		107, 109, 113
-	};
+----------------------------------------------------------------------------- */
 
-	constexpr int positive_modulo(int a, int n) {
-		return (a % n + n) % n;
+#ifndef AY_OBFUSCATE_DEFAULT_KEY
+// The default 64 bit key to obfuscate strings with.
+// This can be user specified by defining AY_OBFUSCATE_DEFAULT_KEY before
+// including obfuscate.h
+#define AY_OBFUSCATE_DEFAULT_KEY ay::generate_key(__LINE__)
+#endif
+
+namespace ay
+{
+	using size_type = unsigned long long;
+	using key_type = unsigned long long;
+
+	// Generate a psuedo-random key that spans all 8 bytes
+	constexpr key_type generate_key(key_type seed)
+	{
+		// Use the MurmurHash3 64-bit finalizer to hash our seed
+		key_type key = seed;
+		key ^= (key >> 33);
+		key *= 0xff51afd7ed558ccd;
+		key ^= (key >> 33);
+		key *= 0xc4ceb9fe1a85ec53;
+		key ^= (key >> 33);
+
+		// Make sure that a bit in each byte is set
+		key |= 0x0101010101010101ull;
+
+		return key;
 	}
 
-	template <typename Indexes, int A, int B>
-	class MetaString;
-
-	template <size_t... I, int A, int B>
-	class MetaString<std::index_sequence<I...>, A, B> {
-	public:
-		constexpr MetaString(char const* str)
-			: encrypted_buffer{ encrypt(str[I])... } {};
-	public:
-		inline const char* decrypt(void) {
-			for (size_t i = 0; i < sizeof...(I); ++i) {
-				buffer[i] = decrypt(encrypted_buffer[i]);
-			}
-			buffer[sizeof...(I)] = 0;
-			return buffer;
+	// Obfuscates or deobfuscates data with key
+	constexpr void cipher(char* data, size_type size, key_type key)
+	{
+		// Obfuscate with a simple XOR cipher based on key
+		for (size_type i = 0; i < size; i++)
+		{
+			data[i] ^= char(key >> ((i % 4) * 4));
 		}
+	}
+
+	// Obfuscates a string at compile time
+	template <size_type N, key_type KEY>
+	class obfuscator
+	{
+	public:
+		// Obfuscates the string 'data' on construction
+		constexpr obfuscator(const char* data)
+		{
+			// Copy data
+			for (size_type i = 0; i < N; i++)
+			{
+				m_data[i] = data[i];
+			}
+
+			// On construction each of the characters in the string is
+			// obfuscated with an XOR cipher based on key
+			cipher(m_data, N, KEY);
+		}
+
+		constexpr const char* data() const
+		{
+			return &m_data[0];
+		}
+
+		constexpr size_type size() const
+		{
+			return N;
+		}
+
+		constexpr key_type key() const
+		{
+			return KEY;
+		}
+
 	private:
-		constexpr int  encrypt(char c) const { return (A * c + B) % 127; } ;
-		constexpr char decrypt(int c) const { return positive_modulo(ExtendedEuclidian<127, A>::y * (c - B), 127); } ;
-	private:
-		char buffer[sizeof...(I) + 1] {};
-		int  encrypted_buffer[sizeof...(I)] {};
+
+		char m_data[N]{};
 	};
+
+	// Handles decryption and re-encryption of an encrypted string at runtime
+	template <size_type N, key_type KEY>
+	class oz_encryptedSegment
+	{
+	public:
+		oz_encryptedSegment(const obfuscator<N, KEY>& obfuscator)
+		{
+			// Copy obfuscated data
+			for (size_type i = 0; i < N; i++)
+			{
+				m_data[i] = obfuscator.data()[i];
+			}
+		}
+
+		~oz_encryptedSegment()
+		{
+			// Zero m_data to remove it from memory
+			for (size_type i = 0; i < N; i++)
+			{
+				m_data[i] = 0;
+			}
+		}
+
+		// Returns a pointer to the plain text string, decrypting it if
+		// necessary
+		operator char*()
+		{
+			decrypt();
+			return m_data;
+		}
+
+		// Manually decrypt the string
+		void decrypt()
+		{
+			if (m_encrypted)
+			{
+				cipher(m_data, N, KEY);
+				m_encrypted = false;
+			}
+		}
+
+		// Manually re-encrypt the string
+		void encrypt()
+		{
+			if (!m_encrypted)
+			{
+				cipher(m_data, N, KEY);
+				m_encrypted = true;
+			}
+		}
+
+		// Returns true if this string is currently encrypted, false otherwise.
+		bool is_encrypted() const
+		{
+			return m_encrypted;
+		}
+
+	private:
+
+		// Local storage for the string. Call is_encrypted() to check whether or
+		// not the string is currently obfuscated.
+		char m_data[N];
+
+		// Whether data is currently encrypted
+		bool m_encrypted{ true };
+	};
+
+	// This function exists purely to extract the number of elements 'N' in the
+	// array 'data'
+	template <size_type N, key_type KEY = AY_OBFUSCATE_DEFAULT_KEY>
+	constexpr auto make_obfuscator(const char(&data)[N])
+	{
+		return obfuscator<N, KEY>(data);
+	}
 }
 
-#define TEST(str) (ozModObfuscator::MetaString<std::make_index_sequence<sizeof(str) - 1>, \
-					      std::get<ozModObfuscator::MetaRandom<__COUNTER__, 30>::value>(ozModObfuscator::PrimeNumbers), \
-					      ozModObfuscator::MetaRandom<__COUNTER__, 126>::value>(str))
+// Obfuscates the string 'data' at compile-time and returns a reference to a
+// ay::oz_encryptedSegment object with global lifetime that has functions for
+// decrypting the string and is also implicitly convertable to a char*
+#define ozObfuscate(data) ozEncryptStringWithKey(data, AY_OBFUSCATE_DEFAULT_KEY)
 
-#define OBFUSCATE(str) (ozModObfuscator::MetaString<std::make_index_sequence<sizeof(str) - 1>, \
-					      std::get<ozModObfuscator::MetaRandom<__COUNTER__, 30>::value>(ozModObfuscator::PrimeNumbers), \
-					      ozModObfuscator::MetaRandom<__COUNTER__, 126>::value>(str).decrypt())
+// Obfuscates the string 'data' with 'key' at compile-time and returns a
+// reference to a ay::oz_encryptedSegment object with global lifetime that has
+// functions for decrypting the string and is also implicitly convertable to a
+// char*
+#define ozEncryptStringWithKey(data, key) \
+	[]() -> ay::oz_encryptedSegment<sizeof(data)/sizeof(data[0]), key>& { \
+		constexpr auto n = sizeof(data)/sizeof(data[0]); \
+		constexpr auto obfuscator = ay::make_obfuscator<n, key>(data); \
+		static auto oz_encryptedSegment = ay::oz_encryptedSegment<n, key>(obfuscator); \
+		return oz_encryptedSegment; \
+	}()
 
-#endif
+/* -------------------------------- LICENSE ------------------------------------
+
+Public Domain (http://www.unlicense.org)
+
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
+software, either in source code form or as a compiled binary, for any purpose,
+commercial or non-commercial, and by any means.
+
+In jurisdictions that recognize copyright laws, the author or authors of this
+software dedicate any and all copyright interest in the software to the public
+domain. We make this dedication for the benefit of the public at large and to
+the detriment of our heirs and successors. We intend this dedication to be an
+overt act of relinquishment in perpetuity of all present and future rights to
+this software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+----------------------------------------------------------------------------- */

@@ -322,12 +322,7 @@ static int GetAssetData(JNIEnv*env, const char* filename, void** outData)
     }
     return num_bytes;
 }
-
-
-#include "icons.h"
-#include "iconcpp.h"
-
-#include "settings.h"
+#include "tabs.h"
 void logEgl()// Initialize EGL
 // This is mostly boilerplate code for EGL...
 {
@@ -569,43 +564,40 @@ void chkBoxHandler(int i , bool a){
            IgnoreLayerCollision(0,8, a);
        }
 
-
+    "Жмот";
 }
-int selectedEnemyESP;
-ESPEnemy* selectedEnemyESPObj;
-int selectedEnemyGame;
-Enemy* selectedEnemyObj;
+
 void DrawContentFor(int i){
 
     if(Settings::Tab == 0){
         switch(i){
             case 0:
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 255, 255));
-                ImGui::Text("Hi! This Mod Menu have many categories and features.");
+                ImGui::Text("%s", (const char *)ozObfuscate("Hi! This Mod Menu have many categories and features."));
                 ImGui::PopStyleColor();
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-                ImGui::Text(" Just explore and enjoy!");
+                ImGui::Text("%s", (const char *)ozObfuscate(" Just explore and enjoy!"));
                 ImGui::PopStyleColor();
                 break;
             case 1:
                 ImGui::SetWindowFontScale(0.8);
-                ImGui::Text("Creator: ozMod");
-                ImGui::Text(" Helper: FCS Leader");
+                ImGui::Text("%s", (const char *)ozObfuscate("Creator: ozMod"));
+                ImGui::Text("%s", (const char *)ozObfuscate(" Helper: FCS Leader"));
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
-                ImGui::Text("  Also thanks to:");
+                ImGui::Text("%s", (const char *)ozObfuscate("  Also thanks to:"));
                 ImGui::PopStyleColor();
 
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-                ImGui::Text("    Ciber Hacker & geokar2006 - for code ideas and ByNameModding");
+                ImGui::Text("%s", (const char *)ozObfuscate("    Ciber Hacker & geokar2006 - for code ideas and ByNameModding"));
                 ImGui::PopStyleColor();
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 165, 0, 255));
-                ImGui::Text("    Omar Ocornut - for ImGui (GUI Realization)");
+                ImGui::Text("%s", (const char *)ozObfuscate("    Omar Ocornut - for ImGui (GUI Realization)"));
                       ImGui::PopStyleColor();
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 50, 65, 255));
-                ImGui::Text("    adamyaxley - for Protection and obfuscation (FCS Leader also)");
+                ImGui::Text("%s", (const char *)ozObfuscate("    adamyaxley - for Protection and obfuscation (FCS Leader also)"));
                 ImGui::PopStyleColor();
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 255, 255));
-                ImGui::Text("    Oifox or Octowolve (IDK) - for OpenGL hooking");
+                ImGui::Text("%s", (const char *)ozObfuscate("    Oifox or Octowolve (IDK) - for OpenGL hooking"));
                 ImGui::PopStyleColor();
                 ImGui::SetWindowFontScale(1);
                 break;
@@ -615,15 +607,15 @@ void DrawContentFor(int i){
             case 3:
                 ImGuiIO& io = ImGui::GetIO();
                 ImGui::Separator();
-                ImGui::Text("Dear ImGui Version: %s", ImGui::GetVersion());
-                ImGui::Text("Mod Menu FPS: %d (%f Frames)", (int)io.Framerate, 1000 / io.Framerate);
+                ImGui::Text(ozObfuscate("Dear ImGui Version: %s"), ImGui::GetVersion());
+                ImGui::Text(ozObfuscate("Mod Menu FPS: %d (%f Frames)"), (int)io.Framerate, 1000 / io.Framerate);
                   ImGui::Separator();
-                ImGui::Text("Game Name: %s", GAME_NAME);
-                ImGui::Text("Game Version: %s", GAME_VER);
+                ImGui::Text(ozObfuscate("Game Name: %s"), GAME_NAME);
+                ImGui::Text(ozObfuscate("Game Version: %s"), GAME_VER);
                 ImGui::Separator();
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
-                ImGui::Text("Dear ImGui Version: %s. Modded by ozMod.", IMGUI_VERSION);
-                ImGui::Text("Using Android Implementation For ImGui In Unity Player.");
+                ImGui::Text(ozObfuscate("Dear ImGui Version: %s. Modded by ozMod."), IMGUI_VERSION);
+                ImGui::Text("%s", (const char *)ozObfuscate("Using Android Implementation For ImGui In Unity Player."));
                 ImGui::PopStyleColor();
                 break;
         }
@@ -632,33 +624,33 @@ void DrawContentFor(int i){
     if(Settings::Tab == 2){
         switch(i) {
             case 0:
-                ImGui::Checkbox("Draw ESP Behind Mod Menu", &ESP.drawBehindMenu);
+                ImGui::Checkbox(ozObfuscate("Draw ESP Behind Mod Menu"), &ESP.drawBehindMenu);
                 break;
             case 1:
-                ImGui::Checkbox("Enable Box", &ESP.Boxes);
-                ImGui::Checkbox("Enable Line", &ESP.Lines);
-                ImGui::Checkbox("Enable Text", &ESP.Texts);
+                ImGui::Checkbox(ozObfuscate("Enable Box"), &ESP.Boxes);
+                ImGui::Checkbox(ozObfuscate("Enable Line"), &ESP.Lines);
+                ImGui::Checkbox(ozObfuscate("Enable Text"), &ESP.Texts);
                 ImGui::Separator();
-                ImGui::Checkbox("Enable Box Background", &ESP.boxBg);
-                ImGui::SliderFloat("Boxes Sizes", &ESP.boxSize, 1, 3);
+                ImGui::Checkbox(ozObfuscate("Enable Box Background"), &ESP.boxBg);
+                ImGui::SliderFloat(ozObfuscate("Boxes Sizes"), &ESP.boxSize, 1, 3);
                 ImGui::Separator();
-                ImGui::SliderFloat("Line Offset Y", &ESP.lineOffsetY, 0, screenHeight);
+                ImGui::SliderFloat(ozObfuscate("Line Offset Y"), &ESP.lineOffsetY, 0, screenHeight);
                 ImGui::Separator();
-                ImGui::SliderFloat("Text Size", &ESP.textSize, 20, 50);
+                ImGui::SliderFloat(ozObfuscate("Text Size"), &ESP.textSize, 20, 50);
                 break;
             case 2:
-                const char* items[] = { "Granny", "Grandpa", "Slendrina", "Monster" };
+                const char* items[] = { ozObfuscate("Granny"), ozObfuscate("Grandpa"), ozObfuscate("Slendrina"), ozObfuscate("Monster") };
 
                 if(ImGui::Combo("Select Enemy", &selectedEnemyESP, items, IM_ARRAYSIZE(items))){
                     selectedEnemyESPObj = ESP.enemies[selectedEnemyESP];
                 }
-                if(selectedEnemyESPObj != nullptr){
-                    if(ImGui::Button("Disable/Enable")){
+                if(selectedEnemyESPObj != nullptr) {
+                    if (ImGui::Button("Disable/Enable")) {
                         selectedEnemyESPObj->ESP = !selectedEnemyESPObj->ESP;
-                  }
-                    ImGui::ColorEdit4("Color", (float*) &selectedEnemyESPObj->color);
+                    }
+                    ImGui::ColorEdit4("Color", (float *) &selectedEnemyESPObj->color);
 
-                            }
+                }
 
                 break;
         }
@@ -666,54 +658,94 @@ void DrawContentFor(int i){
     if(Settings::Tab == 1) {
         switch (i) {
             case 0:
-                const char* items[] = { "Granny", "Grandpa", "Slendrina", "Monster" };
+                const char* items[] = {
+                        ozObfuscate("Granny"),
+                        ozObfuscate("Grandpa"),
+                        ozObfuscate("Slendrina"),
+                        ozObfuscate("Monster")
+                };
 
-                if(ImGui::Combo("Select Enemy", &selectedEnemyGame, items, IM_ARRAYSIZE(items))){
+                if(ImGui::Combo(ozObfuscate("Select Enemy"), &selectedEnemyGame, items, IM_ARRAYSIZE(items))){
                     selectedEnemyObj = EnemyEditor.enemies[selectedEnemyGame];
                 }
-                if (ImGui::Button("Set Active", ImVec2(260 - 15, 81))){
-
+               if(!selectedEnemyObj->destroyed){
+                   if (ImGui::Button(ozObfuscate("Set Active"), ImVec2(260 - 15, 81))){
+                      if(selectedEnemyObj){
+                          selectedEnemyObj->active = !selectedEnemyObj->active;
+                          selectedEnemyObj->setActive = true;
+                      }
+                   }
                 }
+
                 ImGui::SameLine();
-                if (ImGui::Button("Destroy", ImVec2(260 - 15, 81))){
-
+                if (ImGui::Button(ozObfuscate("Destroy"), ImVec2(260 - 15, 81))){
+                    if(selectedEnemyObj && !selectedEnemyObj->destroyed){
+                        selectedEnemyObj->destroy = true;
+                        selectedEnemyObj->destroyed = true;
+                    }
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Play As Enemy", ImVec2(260 - 15, 81))){
+                if(!selectedEnemyObj->destroyed) {
+                    ImGui::SameLine();
+                    if (ImGui::Button(ozObfuscate("Play As Enemy"), ImVec2(260 - 15, 81))) {
+                        if (selectedEnemyObj) {
+                            selectedEnemyObj->playAs = true;
+                        }
+                    }
+                    if (ImGui::Button(ozObfuscate("TP Me to Enemy"), ImVec2(260 - 15, 81))) {
+                        if (selectedEnemyObj) {
+                            selectedEnemyObj->tpMe2Enemy = true;
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(ozObfuscate("TP Enemy to Me"), ImVec2(260 - 15, 81))) {
+                        if (selectedEnemyObj) {
+                            selectedEnemyObj->tpEnemy2Me = true;
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(ozObfuscate("Enemy Kill Me"), ImVec2(260 - 15, 81))) {
+                        if (selectedEnemyObj) {
+                            selectedEnemyObj->enemyKillPlayer = true;
+                        }
+                    }
+                    if (ImGui::Button(ozObfuscate("Set Width"), ImVec2(260 - 15, 81))) {
+                       //unimplemented
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(ozObfuscate("Set Height"), ImVec2(260 - 15, 81))) {
+                        //unimplemented
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(ozObfuscate("Set Size"), ImVec2(260 - 15, 81))) {
+                        //unimplemented
+                    }
+                    if (ImGui::Button(ozObfuscate("God Mode"), ImVec2(260 - 15, 81))) {
+                        if (selectedEnemyGame == 0) {
+                            grCantAttack = true;
+                        }
+                        if (selectedEnemyGame == 1) {
+                            grpCantAttack = true;
+                        }
+                        if (selectedEnemyGame == 2) {
+                            slCantAttack = true;
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(ozObfuscate("Invisible"), ImVec2(260 - 15, 81))) {
+                        if (selectedEnemyGame == 0) {
+                            grInvis = true;
+                        }
+                        if (selectedEnemyGame == 1) {
+                            grpInvis = true;
+                        }
+                        if (selectedEnemyGame == 2) {
+                            slInvis = true;
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(ozObfuscate("Attack Distance"), ImVec2(260 - 15, 81))) {
 
-                }
-                if (ImGui::Button("TP Me to Enemy", ImVec2(260 - 15, 81))){
-
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("TP Enemy to Me", ImVec2(260 - 15, 81))){
-
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Enemy Kill Me", ImVec2(260 - 15, 81))){
-
-                }
-                if (ImGui::Button("Set Width", ImVec2(260 - 15, 81))){
-
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Set Height", ImVec2(260 - 15, 81))){
-
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Set Size", ImVec2(260 - 15, 81))){
-
-                }
-                if (ImGui::Button("God Mode", ImVec2(260 - 15, 81))){
-
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Invisible", ImVec2(260 - 15, 81))){
-
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Attack Distance", ImVec2(260 - 15, 81))){
-
+                    }
                 }
                 break;
         }
@@ -721,32 +753,32 @@ void DrawContentFor(int i){
     if(Settings::Tab == 3){
         switch(i) {
             case 0:
-                ImGui::Checkbox("Enable FOG", &fog);
-                if(ImGui::SliderFloat("Fog Distance", &fogd, 0, 15)){
+                ImGui::Checkbox(ozObfuscate("Enable FOG"), &fog);
+                if(ImGui::SliderFloat(ozObfuscate("Fog Distance"), &fogd, 0, 15)){
 
                 }
                 break;
             case 1:
-                 if(ImGui::Button("Set High Quality")){
+                 if(ImGui::Button(ozObfuscate("Set High Quality"))){
                      SetQualityLevel(1, true);
                  }
 
-                if(ImGui::Button("Set Low Quality")){
+                if(ImGui::Button(ozObfuscate("Set Low Quality"))){
                     SetQualityLevel(0, true);
                 }
                 break;
             case 2:
-                ImGui::Checkbox("Bypass FPS Limit", &fpsbypass);
+                ImGui::Checkbox(ozObfuscate("Bypass FPS Limit"), &fpsbypass);
                 ImGui::Separator();
-                ImGui::Checkbox("Slendrina Wireframe", &chamsSlendrina);
-                ImGui::Checkbox("Enable Wireframe", &wireframe);
-                if(ImGui::SliderFloat("Wireframe size", &wfLW, 0, 5)){
+                ImGui::Checkbox(ozObfuscate("Slendrina Wireframe"), &chamsSlendrina);
+                ImGui::Checkbox(ozObfuscate("Enable Wireframe"), &wireframe);
+                if(ImGui::SliderFloat(ozObfuscate("Wireframe size"), &wfLW, 0, 5)){
 
                 }
 
                 ImGui::Separator();
                 //ImGui::ColorEdit4("Wireframe color", nullptr);
-                ImGui::Checkbox("Enable Color Filter", &clrfilter);
+                ImGui::Checkbox(ozObfuscate("Enable Color Filter"), &clrfilter);
                // ImGui::ColorEdit4("Color Filter", nullptr);
                 break;
         }
@@ -754,48 +786,48 @@ void DrawContentFor(int i){
     if(Settings::Tab == 4){
         switch(i){
             case 0:
-                ImGui::Checkbox("Make Enemy Ignore Teddy", &igntdy);
+                ImGui::Checkbox(ozObfuscate("Make Enemy Ignore Teddy"), &igntdy);
                 ImGui::Separator();
-                ImGui::Checkbox("All Cannot Attack", &allCantAttack);
+                ImGui::Checkbox(ozObfuscate("All Cannot Attack"), &allCantAttack);
                 if(!allCantAttack) {
-                    ImGui::Checkbox("Granny Can't Attack (Grandpa Also)", &grCantAttack);
-                    ImGui::Checkbox("Grandpa Can't Attack", &grpCantAttack);
-                    ImGui::Checkbox("Crocodile Can't Attack", &crCantAttack);
-                    ImGui::Checkbox("Slendrina Can't Attack", &slCantAttack);
+                    ImGui::Checkbox(ozObfuscate("Granny Can't Attack (Grandpa Also)"), &grCantAttack);
+                    ImGui::Checkbox(ozObfuscate("Grandpa Can't Attack"), &grpCantAttack);
+                    ImGui::Checkbox(ozObfuscate("Crocodile Can't Attack"), &crCantAttack);
+                    ImGui::Checkbox(ozObfuscate("Slendrina Can't Attack"), &slCantAttack);
                 }
                 ImGui::Separator();
-                ImGui::Checkbox("No One Can See Me", &allInvis);
+                ImGui::Checkbox(ozObfuscate("No One Can See Me"), &allInvis);
                 if(!allInvis){
-                    ImGui::Checkbox("Invisible From Granny", &grInvis);
-                    ImGui::Checkbox("Invisible From Grandpa", &grpInvis);
-                    ImGui::Checkbox("Invisible From Crocodile", &crInvis);
-                    ImGui::Checkbox("Invisible From Robot", &slInvis);
+                    ImGui::Checkbox(ozObfuscate("Invisible From Granny"), &grInvis);
+                    ImGui::Checkbox(ozObfuscate("Invisible From Grandpa"), &grpInvis);
+                    ImGui::Checkbox(ozObfuscate("Invisible From Crocodile"), &crInvis);
+                    ImGui::Checkbox(ozObfuscate("Invisible From Robot"), &slInvis);
                 }
 
                 break;
             case 1:
 
-                 if(ImGui::Checkbox("Disable Collisions", &igncol)){
+                 if(ImGui::Checkbox(ozObfuscate("Disable Collisions"), &igncol)){
                      IgnoreLayerCollision(0,8, igncol);
                  }
-                 ImGui::Checkbox("Fly", &fly);
-                 if(ImGui::SliderFloat("Front Speed", &frSpeed, 0, 100)){
+                 ImGui::Checkbox(ozObfuscate("Fly"), &fly);
+                 if(ImGui::SliderFloat(ozObfuscate("Front Speed"), &frSpeed, 0, 100)){
                      changeForwSpeed = true;
                  }
-                 if(ImGui::SliderFloat("Back Speed", &bckSpeed, 0, 100)){
+                 if(ImGui::SliderFloat(ozObfuscate("Back Speed"), &bckSpeed, 0, 100)){
                      changeBackSpeed = true;
                  }
-                 ImGui::Checkbox("Ignore Bear Traps", &ignbt);
+                 ImGui::Checkbox(ozObfuscate("Ignore Bear Traps"), &ignbt);
 
                 break;
             case 2:
                 ImGui::SetWindowFontScale(0.8);
-                if(ImGui::SliderFloat("Field Of View", &fov, 0, 150)){
+                if(ImGui::SliderFloat(ozObfuscate("Field Of View"), &fov, 0, 150)){
                     if(Camera_main && Camera_main() && set_fieldOfView){
                         set_fieldOfView(Camera_main(), fov);
                     }
                 }
-                if(ImGui::SliderFloat("Ortographic View Size", &ortoSize, 3, 30)){
+                if(ImGui::SliderFloat(ozObfuscate("Ortographic View Size"), &ortoSize, 3, 30)){
                     if(Camera_main && Camera_main() && set_orthographicSize ){
                         set_orthographicSize(Camera_main(), ortoSize);
                     }
@@ -803,17 +835,17 @@ void DrawContentFor(int i){
 
 
                 ImGui::Separator();
-                if(ImGui::SliderFloat("Near Clip Plane ", &nearCF, 0.3f, 100)){
+                if(ImGui::SliderFloat(ozObfuscate("Near Clip Plane "), &nearCF, 0.3f, 100)){
                     if(Camera_main && Camera_main() && set_nearClipPlane){
                         set_nearClipPlane(Camera_main(), nearCF);
                     }
                 }
-                if(ImGui::SliderFloat("Camera Aspect Size", &camAspect, 1, 50)){
+                if(ImGui::SliderFloat(ozObfuscate("Camera Aspect Size"), &camAspect, 1, 50)){
                     if(Camera_main && Camera_main() && set_aspect){
                         set_aspect(Camera_main(), camAspect);
                     }
                 }
-                if(ImGui::Checkbox("Ortographic View", &ortoCam)){
+                if(ImGui::Checkbox(ozObfuscate("Ortographic View"), &ortoCam)){
                     if(Camera_main && Camera_main() && set_orthographic){
                         set_orthographic(Camera_main(), ortoCam);
                     }
@@ -840,22 +872,22 @@ void cmdExecuteSystem(const char* input){
 }
 void
 DrawESPElement(ImDrawList *list,ImVec2 fromWhere, const char *name, ImColor elClr, ImVec2 toWhere, bool enableBg,
-               ImVec2 addV2, float distance) {
+               float addV2, float distance) {
     //l:ImVec2(ImVec2(screenWidth / 2, screenHeight / 2))
     //
     if(ESP.Lines){
         list->AddLine(fromWhere, toWhere, elClr);
     }
-    const char * dstr = std::string("Distance: " + std::to_string(distance)).c_str();
+    const char * dstr = std::string(std::string(ozObfuscate("Distance: ")) + std::to_string(distance)).c_str();
     if(ESP.Boxes) {
         if (enableBg) {
             //  elClr.Value = ImVec4(elClr.Value.x / 4,elClr.Value.y,elClr.Value.z, elClr.Value.w / 2   );
             list->AddRectFilled(ImVec2(toWhere.x - 150, toWhere.y),
-                                ImVec2((toWhere.x + 150 + addV2.x) * ESP.boxSize, (toWhere.y + 400 + addV2.y) * ESP.boxSize),
+                                ImVec2((toWhere.x + 150) * addV2, (toWhere.y + 400) * addV2),
                                 ImColor(elClr.Value.x, elClr.Value.y, elClr.Value.z, 0.15));
         }
         list->AddRect(ImVec2(toWhere.x - 150, toWhere.y),
-                      ImVec2((toWhere.x + 150 + addV2.x) * ESP.boxSize, (toWhere.y + 400 + addV2.y) * ESP.boxSize), elClr, 0, 0,
+                      ImVec2((toWhere.x + 150) * addV2, (toWhere.y + 400) * addV2), elClr, 0, 0,
                       enableBg ? 2 : 1);
     }
     if(ESP.Texts){
@@ -892,7 +924,7 @@ void Render(){
 
                 } else {
                     DrawESPElement(drawList, ImVec2(screenWidth / 2, ESP.lineOffsetY), me->name, me->color,
-                                   me->screenPosition, ESP.boxBg, me->boxSize, me->distance);
+                                   me->screenPosition, ESP.boxBg,1, me->distance);
                 }
             }
 
@@ -916,37 +948,39 @@ void Render(){
 
     ImGui:: SetNextWindowSize(ImVec2(ImGui::get_openAnimationState(),488));
     //  ImGui::GetCurrentWindow()->SizeFull.x = ImGui::get_openAnimationState()
-    ImGui::Begin("Mod Menu for " GAME_NAME "(" GAME_VER ")" " - by ozMod", nullptr, ImGuiWindowFlags_MenuBar |
+    std::string wName = std::string(ozObfuscate("Mod Menu for ")) + GAME_NAME + "(" + GAME_VER + ")" + std::string(ozObfuscate(" - by ozMod"));
+    ImGui::Begin( wName.c_str(), nullptr, ImGuiWindowFlags_MenuBar |
+
                                                                                     ImGuiWindowFlags_AlwaysAutoResize);
 
 
     if (ImGui::BeginMenuBar())
     {
-        if (ImGui::BeginMenu("Tools"))
+        if (ImGui::BeginMenu(ozObfuscate("Tools")))
         {
-            if (ImGui::MenuItem("Paint", "Ctrl+P" , &show_paint)) {
+            if (ImGui::MenuItem(ozObfuscate("Paint"), ozObfuscate("Ctrl+P") , &show_paint)) {
                 /* Do stuff */ }
-            ImGui::MenuItem("Metrics/Debugger", nullptr);
+            ImGui::MenuItem(ozObfuscate("Metrics/Debugger"), nullptr);
 
-            ImGui::MenuItem("Console", nullptr, &show_app_console);
-            ImGui::MenuItem("Game Logs", nullptr, &show_app_log);
-            if (ImGui::MenuItem("Style Editor", "Ctrl+O")) {
+            ImGui::MenuItem(ozObfuscate("Console"), nullptr, &show_app_console);
+            ImGui::MenuItem(ozObfuscate("Game Logs"), nullptr, &show_app_log);
+            if (ImGui::MenuItem(ozObfuscate("Style Editor"), ozObfuscate("Ctrl+O"))) {
                 /* Do stuff */ }
-            if (ImGui::MenuItem("Close", "Ctrl+C"))  {
+            if (ImGui::MenuItem(ozObfuscate("Close"), ozObfuscate("Ctrl+C")))  {
             }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Style Editor"))
+        if (ImGui::BeginMenu(ozObfuscate("Style Editor")))
         {
-            if (ImGui::MenuItem("Open Editor", "Ctrl+O")) {
+            if (ImGui::MenuItem(ozObfuscate("Open Editor"), ozObfuscate("Ctrl+O"))) {
                 /* Do stuff */ }
 
-            if (ImGui::MenuItem("Reset All", "Ctrl+R"))  {
+            if (ImGui::MenuItem(ozObfuscate("Reset All"), ozObfuscate("Ctrl+R")))  {
 
             }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Features"))
+        if (ImGui::BeginMenu(ozObfuscate("Features")))
         {
             if (ImGui::MenuItem("Test", "")) {
 
@@ -954,12 +988,12 @@ void Render(){
 
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Help"))
+        if (ImGui::BeginMenu(ozObfuscate("Help")))
         {
-            if (ImGui::MenuItem("About Mod Menu", "Ctrl+M")) {
+            if (ImGui::MenuItem(ozObfuscate("About Mod Menu"), ozObfuscate("Ctrl+M"))) {
 
             }
-            if (ImGui::MenuItem("About ImGui", "Ctrl+G")) {
+            if (ImGui::MenuItem(ozObfuscate("About ImGui"), ozObfuscate("Ctrl+G"))) {
 
             }
 
@@ -980,26 +1014,26 @@ void Render(){
         static ImVec4 inactive = to_vec4(31, 30, 31, 255);
 
         ImGui::PushStyleColor(ImGuiCol_Button, Settings::Tab == 1 ? active : inactive);
-        if (ImGui::Button(" General", ImVec2(230 - 15, 81))){
+        if (ImGui::Button(ozObfuscate("General"), ImVec2(230 - 15, 81))){
             Settings::Tab = 1;
         }
 
 
 
         ImGui::PushStyleColor(ImGuiCol_Button, Settings::Tab == 2 ? active : inactive);
-        if (ImGui::Button(" ESP", ImVec2(230 - 15, 81))){
+        if (ImGui::Button(ozObfuscate("ESP"), ImVec2(230 - 15, 81))){
             Settings::Tab = 2;
         }
 
 
 
         ImGui::PushStyleColor(ImGuiCol_Button, Settings::Tab == 3 ? active : inactive);
-        if (ImGui::Button(ICON_CPU " Unity", ImVec2(230 - 15, 81)))
+        if (ImGui::Button( ozObfuscate("Unity"), ImVec2(230 - 15, 81)))
             Settings::Tab = 3;
 
 
         ImGui::PushStyleColor(ImGuiCol_Button, Settings::Tab == 4 ? active : inactive);
-        if (ImGui::Button(" Player", ImVec2(230 - 15, 81)))
+        if (ImGui::Button(ozObfuscate("Player"), ImVec2(230 - 15, 81)))
             Settings::Tab = 4;
 
         ImGui::PopStyleColor(4);
