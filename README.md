@@ -12,3 +12,8 @@
    in place of androidx/viewbinding/systemui/SystemOverlaySurface you need to put own package name if you renamed it.
    
    put it here ![image](https://user-images.githubusercontent.com/80401984/145403251-e7d1ae29-47ac-411b-93d5-e3861894cfc6.png)
+ 
+# Recomendations
+
+1. Use it in Android Studio to better effect. If you are using AIDE and having issues then don't write to issues. I will not repond to theese issues and close it.
+2. Rename to other package name. 
