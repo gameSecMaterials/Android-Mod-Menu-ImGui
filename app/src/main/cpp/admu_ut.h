@@ -4,18 +4,16 @@
 
 struct {
 
-//Credit: Octowolve
     void Make(JNIEnv *env, jobject thiz, const char *text, int length) {
-        //Add our toast in here so it wont be easy to change by simply editing the smali and cant
-        //be cut out because this method is needed to start the hack (Octowolve is smart)
-        jstring jstr = env->NewStringUTF(text); //Edit this text to your desired toast message!
-        jclass toast = env->FindClass("android/widget/Toast");
+
+        jstring jstr = env->NewStringUTF(text);
+        jclass toast = env->FindClass(ozObfuscate("android/widget/Toast"));
         jmethodID methodMakeText =
                 env->GetStaticMethodID(
                         toast,
-                        "makeText",
+                        ozObfuscate("makeText"),
 
-                                "(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;");
+                        ozObfuscate("(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;"));
         if (methodMakeText == NULL) {
 
             return;
@@ -25,7 +23,7 @@ struct {
         jobject toastobj = env->CallStaticObjectMethod(toast, methodMakeText,
                                                        thiz, jstr, length);
 
-        jmethodID methodShow = env->GetMethodID(toast, "show", "()V");
+        jmethodID methodShow = env->GetMethodID(toast, ozObfuscate("show"), ozObfuscate("()V"));
         if (methodShow == NULL) {
 
             return;
