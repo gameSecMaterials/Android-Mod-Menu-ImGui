@@ -18,3 +18,9 @@
 
 1. Use it in Android Studio to better effect. If you are using AIDE and having issues then don't write to issues. I will not repond to theese issues and close it.
 2. Rename to other package name. I did this one to hide from leechers.
+
+# Used to create
+
+Obfuscate by Adam Yaxley
+GLSurfaceView
+OpenGL (OpenGL Emscripten v2)
