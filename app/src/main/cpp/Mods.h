@@ -14,6 +14,7 @@ void *get_il2cpp() {
 }
 #include <unistd.h>
     #include <pthread.h>
+#include <android/native_window.h>
 //#include "libil2cpp.so.h"
 #include "ozModSharedLibraryManager.h"
 int hookCount = 0;
@@ -791,54 +792,50 @@ void Wireframe(){
         MSHookFunction(reinterpret_cast<void*>(p_glDrawElements), reinterpret_cast<void*>(new_glDrawElements), reinterpret_cast<void**>(&old_glDrawElements));
     }
 }
-EGLAPI EGLSurface EGLAPIENTRY (*old_eglCreateWindowSurface )(EGLDisplay dpy, EGLConfig config, EGLNativeWindowType win, const EGLint *attrib_list);
-EGLAPI EGLSurface EGLAPIENTRY new_eglCreateWindowSurface(EGLDisplay dpy, EGLConfig config, EGLNativeWindowType win, const EGLint *attrib_list){
-    LOGI("eglCreateWindowSurface");
-    EGLSurface rezultSurface = old_eglCreateWindowSurface(dpy, config, win, attrib_list);
-    return rezultSurface;
-}
 EGLAPI EGLBoolean EGLAPIENTRY (*old_eglSwapBuffers) (EGLDisplay dpy, EGLSurface surface);
 EGLAPI EGLBoolean EGLAPIENTRY new_eglSwapBuffers (EGLDisplay dpy, EGLSurface surface) {
-    LOGI("eglSwapBuffers being invoked");
-
+    Render();
     if(!old_eglSwapBuffers(dpy, surface)){
-        LOGI("eglSwapBuffers invoke error.");
-        checkGlError("eglSwapBuffers");
         return false;
     }
     return true;
 }
-int (*old_sub_434958) ();
-int  sub_434958 () {
-    LOGI("Calling: sub_434958");
-    return old_sub_434958();
+int32_t (*old_ANativeWindow_getWidth)(ANativeWindow* window);
+int32_t new_ANativeWindow_getWidth(ANativeWindow* window){
+    int32_t returnValue = old_ANativeWindow_getWidth(window);
+    LOGI("I know that screen width is %d", returnValue);
+    screenWidth = returnValue;
+    return returnValue;
 }
 
-int (*old_sub_518B10) (unsigned int *a1);
-int  sub_518B10 (unsigned int *a1) {
-    LOGI("Calling: sub_518B10");
-    return old_sub_518B10(a1);
+int32_t (*old_ANativeWindow_getHeight)(ANativeWindow* window);
+int32_t new_ANativeWindow_getHeight(ANativeWindow* window){
+    int32_t returnValue = old_ANativeWindow_getHeight(window);
+    LOGI("I know that screen height is %d", returnValue);
+    screenHeight = returnValue;
+    return returnValue;
 }
-bool (*old_sub_6591E0) (int a1);
-bool  sub_6591E0 (int a1) {
-    LOGI("Calling: sub_6591E0");
-    return old_sub_6591E0(a1);
-}
-
-void ImGuiImpl(){
-   // startTime = currentTimeInMilliseconds();
-    //screenWidth = 2340;
-    //screenHeight = 1080;
+void ImGuiImpl(bool swapbuffers = true){
+    startTime = currentTimeInMilliseconds();
+    screenWidth = 2340;
+    screenHeight = 1080;
     setupGraphics( screenWidth, screenHeight);
-    auto p_glDrawElements = (const void*(*)(...))dlsym(eglHandle, "eglSwapBuffers");
-    const char *dlsym_error = dlerror();
-    if(dlsym_error){
-        LOGE("Cannot load symbol 'eglSwapBuffers': %s", dlsym_error);
-        return;
-    }else{
-        MSHookFunction(reinterpret_cast<void*>(p_glDrawElements), reinterpret_cast<void*>(new_eglSwapBuffers), reinterpret_cast<void**>(&old_eglSwapBuffers));
+    if(swapbuffers){
+        auto swapBuffersSym = (const void*(*)(...))dlsym(eglHandle, "eglSwapBuffers");
+        const char *dlsym_error = dlerror();
+        if(dlsym_error){
+            LOGE("Cannot load symbol 'eglSwapBuffers': %s", dlsym_error);
+            return;
+        }else{
+            MSHookFunction(reinterpret_cast<void*>(swapBuffersSym), reinterpret_cast<void*>(new_eglSwapBuffers), reinterpret_cast<void**>(&old_eglSwapBuffers));
+        }
     }
+
+        MSHookFunction((void*)(ANativeWindow_getWidth), (void*)(new_ANativeWindow_getWidth), (void**)(&old_ANativeWindow_getWidth));
+    MSHookFunction((void*)(ANativeWindow_getHeight), (void*)(new_ANativeWindow_getHeight), (void**)(&old_ANativeWindow_getHeight));
+
 }
+
 
 int (*old_DiffDataInvis)(void * , int );
 int DiffDataInvis(void * , int ){
@@ -868,22 +865,13 @@ void HookMods(){
           il2cpp_resolve_icall_0 = (void*(*)(const char *)) getAbsoluteAddress(targetLibName, 0x270D94);
 
     }
-
     //Game Utilities
     SetQualityLevel= (void(*)(int, bool)) getAbsoluteAddress(targetLibName, 0x94EDC8);
     SetActive = (void(*)(void*, bool)) getAbsoluteAddress(targetLibName, 0x96A654);
     Destroy = (void(*)(void*)) getAbsoluteAddress(targetLibName, 0x949864);
-
     StartCoroutine = (void*(*)(void*, void*)) getAbsoluteAddress(targetLibName, 0x94820C);
-    //Camera_main  =  (void *(*)()) getAbsoluteAddress(targetLibName, 0x962630);
-   // set_orthographic  =  (void(*)(void*, bool)) getAbsoluteAddress(targetLibName, 0x960E4C);
-    //  set_useGravity  =  (void(*)(void*, bool)) getAbsoluteAddress(targetLibName, 0xD0DDA8);
     WorldToScreenPoint =  (Vector3(*)(void*, Vector3)) getAbsoluteAddress(targetLibName, 0x961F8C);
-   // set_fieldOfView  =  (void(*)(void*, float)) getAbsoluteAddress(targetLibName, 0x960BF4);
-   // set_orthographicSize =  (void(*)(void*, float )) getAbsoluteAddress(targetLibName, 0x960DA4 );
-   // set_nearClipPlane =  (void(*)(void*, float )) getAbsoluteAddress(targetLibName, 0x960AA4 );
-  //  set_aspect =  (void(*)(void*, float )) getAbsoluteAddress(targetLibName, 0x960F44 );
-    IgnoreLayerCollision =  (void(*)(int,int,bool )) getAbsoluteAddress(targetLibName, 0xD099A4 );
+     IgnoreLayerCollision =  (void(*)(int,int,bool )) getAbsoluteAddress(targetLibName, 0xD099A4 );
     get_gameObject  =  (void *(*)(void*)) getAbsoluteAddress(targetLibName, 0x96444C);
     get_transform  =  (void *(*)(void*)) getAbsoluteAddress(targetLibName, 0x96A55C);
     get_forward  =  (Vector3(*)(void*)) getAbsoluteAddress(targetLibName, 0xAE0310);
@@ -892,19 +880,9 @@ void HookMods(){
     set_pos  =  (void(*)(void*, Vector3)) getAbsoluteAddress(targetLibName, 0xADF850);
     get_pos   =  (Vector3(*)(void*)) getAbsoluteAddress(targetLibName, 0xADF778);
     set_enabled   =  (void(*)(void*, bool)) getAbsoluteAddress(targetLibName, 0xD08D70);
-   //CharacterController_set_radius = (void (*)(void *, float ))getAbsoluteAddress("libil2cpp.so" ,0xEAB82C); // CharacterController$$set_radius
-
-    //Game
-  //  MSHookFunction((void *) (int (*)())il2cpp_getMethod("UnityEngine.PlayerPrefs::GetInt(System.String,System.Int32)"),
-    //               (void *) DiffDataInvis,
-    //               (void **) &old_DiffDataInvis);
-    MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x698E44),
+      MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x698E44),
                    (void *) BearTrap_OnTriggerEnter, (void **) &old_BearTrap_OnTriggerEnter);
-   // MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x59E894),
-         //          (void *) EnemyAIGranny_FixedUpdate, (void **) &old_EnemyAIGranny_FixedUpdate);
- //   MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x408718),
-       //            (void *) EnemyAIGrandpa_FixedUpdate, (void **) &old_EnemyAIGrandpa_FixedUpdate);
-    MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x5A6664), (void *) EnemyAIGranny_PC,
+   MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x5A6664), (void *) EnemyAIGranny_PC,
                    (void **) &old_EnemyAIGranny_PC);
     MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x4116CC), (void *) EnemyAIGrandpa_PC,
                    (void **) &old_EnemyAIGrandpa_PC);
@@ -923,18 +901,13 @@ void HookMods(){
 
 void* thread(void* obj){
     //Initialize ESP Enemies.
-    ESP.Init();
+     ESP.Init();
     EnemyEditor.Init();
     glHandle = get_GL();
     eglHandle = get_EGL();
-    //ImGuiImpl();
-    auto fp_eglNewSurface = (const void*(*)(...))dlsym(eglHandle, "eglCreateWindowSurface");
-    const char *dlsym_error1 = dlerror();
-    if(dlsym_error1){
-        LOGE("Cannot load symbol 'eglCreateWindowSurface': %s", dlsym_error1);
-    }else{
-        MSHookFunction(reinterpret_cast<void*>(fp_eglNewSurface), reinterpret_cast<void*>(new_eglCreateWindowSurface), reinterpret_cast<void**>(&old_eglCreateWindowSurface));
-    }
+    ImGuiImpl(true);
+    LOGI("Lol");
+
     //RequestToast((currentLang == 0 ? OBFUSCATE("Библиотека игры успешно загружена.") : OBFUSCATE("Game Library Is Loaded.")));
     int attempts = 1;
     bool tired = false;

@@ -1,18 +1,15 @@
 package androidx.viewbinding.systemui;
-
+import com.unity3d.player.UnityPlayer;
+import android.app.Activity;
 import android.os.Bundle;
-
-import com.unity3d.player.UnityPlayerActivity;
-
-public class SurfaceEmbedActivity extends UnityPlayerActivity {
+public class SurfaceEmbedActivity extends Activity {
     // Used to load the 'imgui' library on application startup.
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
 
         requestWindowFeature(1);
         getWindow().setFlags(1024, 1204);
-        UnityPlayerImpl unityPlayer = new UnityPlayerImpl(this);
-        mUnityPlayer = unityPlayer;
+        UnityPlayer unityPlayer = new UnityPlayer(this);
         setContentView(unityPlayer);
         SystemOverlaySurface.Start(this, unityPlayer);
     }

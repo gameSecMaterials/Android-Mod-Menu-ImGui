@@ -1,5 +1,6 @@
 package com.unity3d.player;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -30,7 +31,7 @@ public class UnityPlayer extends FrameLayout {
         return true;
     }
     //private final native boolean nativeRender();
-
+    public static Activity currentActivity;
     public UnityPlayer(Context context) {
         super(context);
 

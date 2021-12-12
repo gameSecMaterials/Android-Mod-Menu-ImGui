@@ -7,15 +7,14 @@ cmake_minimum_required(VERSION 3.10.2)
 
 # Declares and names the project.
 
-project("__ModMenu")
-
+project("NoxTeam")
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
-
 add_library( # Sets the name of the library.
-        __ModMenu
+
+        NoxTeam
 
         # Sets the library as a shared library.
         SHARED
@@ -51,7 +50,7 @@ find_library( # Sets the name of the path variable.
 # can link multiple libraries, such as libraries you define in this
 # build script, prebuilt third-party libraries, or system libraries.
 target_link_libraries( # Specifies the target library.
-        __ModMenu
+        NoxTeam
         -landroid
         EGL
         GLESv2

@@ -14,7 +14,7 @@ DWORD findLibrary(const char *library) {
     FILE *fp = NULL;
     DWORD address = 0;
 
-    sprintf(filename, "%s", (const char*)ozObfuscate("/proc/self/maps"));
+    sprintf(filename, ozObfuscate("%s"), (const char*)ozObfuscate("/proc/self/maps"));
 
     fp = fopen(filename, ozObfuscate("rt"));
     if (fp == NULL) {
@@ -43,11 +43,6 @@ DWORD getAbsoluteAddress(const char *libraryName, DWORD relativeAddr) {
     if (libBase == 0)
         return 0;
     return (reinterpret_cast<DWORD>(libBase + relativeAddr));
-}
-
-
-jboolean isGameLibLoaded(JNIEnv *env, jobject thiz) {
-    return libLoaded;
 }
 
 bool isLibraryLoaded(const char *libraryName) {

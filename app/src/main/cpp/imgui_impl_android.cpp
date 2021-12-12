@@ -32,6 +32,19 @@ static unsigned int g_VboHandle = 0, g_ElementsHandle = 0;
 // - in your Render function, try translating your projection matrix by (0.5f,0.5f) or (0.375f,0.375f)
 void ImGui_ImplAndroidGLES2_RenderDrawLists(ImDrawData* draw_data)
 {
+	GLsizei count; // [sp+0h] [bp-C0h]
+	GLuint texture; // [sp+4h] [bp-BCh]
+	GLint scissorsBox[4]; // [sp+94h] [bp-2Ch] BYREF
+	GLint v29; // [sp+70h] [bp-50h] BYREF
+	GLint v30; // [sp+74h] [bp-4Ch] BYREF
+	GLint v31; // [sp+78h] [bp-48h] BYREF
+	GLint v32; // [sp+7Ch] [bp-44h] BYREF
+	GLint v28; // [sp+70h] [bp-50h] BYREF
+	glGetIntegerv(0x80CAu, &v28);
+	glGetIntegerv(0x80C9u, &v32);
+	glGetIntegerv(0x80C8u, &v31);
+	glGetIntegerv(0x80CBu, &v30);
+	glGetIntegerv(0x80CAu, &v29);
 	// Backup GL state
 	GLint last_program;
 	glGetIntegerv(GL_CURRENT_PROGRAM, &last_program);
@@ -41,6 +54,8 @@ void ImGui_ImplAndroidGLES2_RenderDrawLists(ImDrawData* draw_data)
 	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &last_array_buffer);
 	GLint last_element_array_buffer;
 	glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &last_element_array_buffer);
+
+	glGetIntegerv(GL_SCISSOR_BOX, scissorsBox);
 
 	GLint last_blend_equation_rgb;
 	glGetIntegerv(GL_BLEND_EQUATION_RGB, &last_blend_equation_rgb);
@@ -124,7 +139,7 @@ void ImGui_ImplAndroidGLES2_RenderDrawLists(ImDrawData* draw_data)
 	glBindBuffer(GL_ARRAY_BUFFER, last_array_buffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, last_element_array_buffer);
 	glBlendEquationSeparate(last_blend_equation_rgb, last_blend_equation_alpha);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glBlendFuncSeparate(v31, v30, v29, v28);
 	if (last_enable_blend)
 		glEnable(GL_BLEND);
 	else
@@ -146,7 +161,7 @@ void ImGui_ImplAndroidGLES2_RenderDrawLists(ImDrawData* draw_data)
 		glDisable(GL_SCISSOR_TEST);
 
     glViewport(last_viewport[0], last_viewport[1], (GLsizei)last_viewport[2], (GLsizei)last_viewport[3]);
-
+	glScissor(scissorsBox[0], scissorsBox[1], scissorsBox[2], scissorsBox[3]);
 }
 
 /*static const char* ImGui_ImplAndroidGLES2_GetClipboardText()

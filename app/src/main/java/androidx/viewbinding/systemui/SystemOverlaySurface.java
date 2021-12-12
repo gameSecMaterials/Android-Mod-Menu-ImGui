@@ -1,4 +1,5 @@
 package androidx.viewbinding.systemui;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.opengl.GLSurfaceView;
@@ -14,12 +15,24 @@ public class SystemOverlaySurface extends GLSurfaceView implements Renderer {
     public static UnityPlayer gameSurface;
     public static SystemOverlaySurface instance;
     public Activity actInit;
+
     public static native boolean HandleInput(int i, float f, float f2, int i2);
+
+    @Override
     public native void onDrawFrame(GL10 gl10);
+
+    @Override
     public native void onPause();
+
+    @Override
     public native void onResume();
+
+    @Override
     public native void onSurfaceChanged(GL10 gl10, int i, int i2);
+
+    @Override
     public native void onSurfaceCreated(GL10 gl10, EGLConfig eGLConfig);
+
     public SystemOverlaySurface(Context context) {
         super(context);
         setEGLConfigChooser(8, 8, 8, 8, 16, 0);
@@ -31,7 +44,10 @@ public class SystemOverlaySurface extends GLSurfaceView implements Renderer {
 
         ((InputMethodManager) instance.actInit.getSystemService("input_method")).toggleSoftInputFromWindow(instance.getApplicationWindowToken(), 2, 0);
     }
+
     public native boolean dispatchKeyEvent(KeyEvent e);
+    @SuppressLint("ClickableViewAccessibility")
+    @Override
     public native boolean onTouchEvent(MotionEvent e);
     public static byte getSym(int arg1, int arg2){
         return (byte) (arg1 >> arg2);
