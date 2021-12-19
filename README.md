@@ -3,21 +3,26 @@
  Preview (built in Granny 3):
  ![image](https://user-images.githubusercontent.com/80401984/145401480-8910961b-c909-4130-b827-a636db62d778.png)
  # How it works?
-  The menu will execute our native method Start in our Java part. Then, native method will create GLSurfaceView with WindowManager (yes, this is the way to implement window overlay mod menus internally). 
+   Later.
   # How to inject
-  You need to add following line in ```com/unity/player/UnityPlayerActivity```:
+  1. Copy your builded lib to lib/armeabi-v7a
+  2. Load the library on Activity Start. Tutorial:
+  
+     You need to add following lines in ```com/unity/player/UnityPlayerActivity```:
    
-   ```invoke-static {p0, p1}, Landroidx/viewbinding/systemui/SystemOverlaySurface;->Start(Landroid/app/Activity;Lcom/unity3d/player/UnityPlayer;)V```
+   ```
+   const-string v0, "_ozMod"
+
+    invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V
+   ```
    
-   in place of androidx/viewbinding/systemui/SystemOverlaySurface you need to put own package name if you renamed it.
-   
-   Put the line above here (under ```invoke-virtual {p1}, Lcom/unity3d/player/UnityPlayer;->requestFocus()Z```):
-   ![image](https://user-images.githubusercontent.com/80401984/145403251-e7d1ae29-47ac-411b-93d5-e3861894cfc6.png)
-   Don't forget to add menu folders!
+   Do it like that
+ ![image](https://user-images.githubusercontent.com/80401984/145727071-26bb7d51-ae83-4fdc-94f5-aa3b9421ed4b.png)
+
 # Recomendations
 
 1. Use it in Android Studio to better effect. If you are using AIDE and having issues then don't write to issues. I will not repond to theese issues and close it.
-2. Rename to other package name. I did this one to hide from leechers.
+2. Please Rename lib name with CMakeLists.txt
 
 # Used to create
 
@@ -26,3 +31,18 @@ Obfuscate by Adam Yaxley
 GLSurfaceView
 
 OpenGL (OpenGL Emscripten v2)
+
+EGL
+
+Il2cpp Dumper
+
+dnSpy
+
+Cydia Substrade
+
+Dobby
+
+JNI
+
+
+If i'm not mentionied someone else who helped/contributed to that project, just contact me.
