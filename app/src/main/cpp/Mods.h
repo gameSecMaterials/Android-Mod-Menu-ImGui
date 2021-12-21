@@ -103,6 +103,9 @@ struct ESP{
 
 }ESP;
 struct GrannyItemPointers{
+    void*granny;
+    void*grandpa;
+    void* crow;
     void * accelerator;
     void * bridgecrank;
     void* coconut;
@@ -126,8 +129,9 @@ struct GrannyItemPointers{
     void*vas;
     void*vas2;
     void*weaponkey;
-
+void* fire;
 }Items;
+
 bool fog, fpsbypass, wireframe, clrfilter, clrfilterR, clrfilterG, clrfilterB;
 ImColor clf, wfClr;
 float wfLW = 1;
@@ -199,7 +203,7 @@ struct Quaternion {
             float y;
             float z;
             float w;
-}
+};
 struct monoString {
     void *klass;
     void *monitor;
@@ -372,6 +376,7 @@ void *(*get_transform)(void * t);
 Vector3 (*get_forward)(void * t);
 Vector3 (*get_right)(void * t);
 Vector3 (*get_pos)(void * t);
+Quaternion (*get_rot)(void * t);
 //Vector3 (*WorldToScreenPoint)(void*,Vector3 position);
 void (*set_pos)(void * t, Vector3 w);
 void (*set_enabled) (void* i,bool value);
@@ -676,6 +681,7 @@ void FPSControllerNEW_FixedUpdate(void *instance) {
                set_pos(plyrTransform, target);
                teleportPlaceCommit = false;
            }
+
            playerPos[0] = posn.x;
            playerPos[1] = posn.y;
            playerPos[2] = posn.z;
@@ -1019,6 +1025,175 @@ void new_signleGLFunc(){
 //glClearStencil
     LOGI("Render: glRenderbufferStorage (dobby!!)")
 }
+
+void (*old_SetupItemPtrs)(void*);
+void SetupItemPtrs(void* _){
+//glClearStencil
+if(!_){
+    LOGE("Bruhhh why i can't use instance...")
+    return;
+}
+    LOGE("Bruhhh why it updates...")
+    Items.accelerator = get_gameObject(*(void* *) ((uint64_t) _ + 0x1C0));
+    Items.bridgecrank = get_gameObject(*(void* *) ((uint64_t) _ + 0xEC));
+    Items.coconut = get_gameObject(*(void* *) ((uint64_t) _ + 0x170));
+    Items.coin = get_gameObject(*(void* *) ((uint64_t) _ + 0x198));
+    Items.crowbar = get_gameObject(*(void* *) ((uint64_t) _ + 0x1E4));
+    Items.doorActivator = get_gameObject(*(void* *) ((uint64_t) _ + 0x1CC));
+    Items.electricSwitch = get_gameObject(*(void* *) ((uint64_t) _ + 0x1A8));
+    Items.fire = *(void* *) ((uint64_t) _ + 0xD4);
+    Items.firewood = get_gameObject(*(void* *) ((uint64_t) _ + 0xDC)); //
+    Items.gate = *(void* *) ((uint64_t) _ + 0xA0);
+    Items.gatefuse = get_gameObject(*(void* *) ((uint64_t) _ + 0x88));
+    Items.gencable = get_gameObject(*(void* *) ((uint64_t) _ + 0x160));
+    Items.matches = get_gameObject(*(void* *) ((uint64_t) _ + 0xCC));
+    Items.padlockkey = get_gameObject(*(void* *) ((uint64_t) _ + 0x154));
+    Items.planka = get_gameObject(*(void* *) ((uint64_t) _ + 0x108));
+    Items.safekey = get_gameObject(*(void* *) ((uint64_t) _ + 0x114));
+    Items.shedkey = get_gameObject(*(void* *) ((uint64_t) _ + 0x148));
+    Items.shotgun = get_gameObject(*(void* *) ((uint64_t) _ + 0xB8));
+    Items.slingshot = get_gameObject(*(void* *) ((uint64_t) _ + 0x124));
+    Items.teddy =  get_gameObject(*(void* *) ((uint64_t) _ + 0xC4));
+    //ticket
+    Items.trainKey = get_gameObject(*(void* *) ((uint64_t) _ + 0x1B4));
+    Items.vas = get_gameObject(*(void* *) ((uint64_t) _ + 0x130));
+    Items.vas2 = get_gameObject(*(void* *) ((uint64_t) _ + 0x13C));
+    Items.crow = *(void* *) ((uint64_t) _ + 0x80);
+    Items.granny = *(void* *) ((uint64_t) _ + 0x18);
+    Items.grandpa = *(void* *) ((uint64_t) _ + 0x1C);
+
+    void *player = *(void **) ((uint64_t) _ + 0x14); //Объект игрока
+
+    if(player){
+        void *plyrTransform = get_transform(player);
+        if (plyrTransform) {
+            Vector3 posn = get_pos(plyrTransform);
+            if(ItemSpawnCommit){
+                LOGD("Commit item spawn!")
+                Quaternion q;
+                q = get_rot(plyrTransform);
+                Vector3 itemPositionFront = posn+(get_forward(plyrTransform)* 3);
+                switch(ItemToSpawn){
+                    case 0:
+                        LOGD("Commit item spawn! 0")
+                        Instantiate(Items.crow,itemPositionFront, q);
+                        break;
+                    case 1:
+                        LOGD("Commit item spawn! 0.5")
+                        Instantiate(Items.granny,itemPositionFront, q);
+                        break;
+                    case 2:
+                        LOGD("Commit item spawn! 1")
+                        Instantiate(Items.grandpa,itemPositionFront, q);
+                        break;
+                    case 3:
+                        LOGD("Commit item spawn! 1")
+                        Instantiate(Items.fire,itemPositionFront, q);
+                        break;
+                    case 4:
+                        LOGD("Commit item spawn! 2")
+                        Instantiate(Items.gate, itemPositionFront, q);
+                        break;
+                    case 5:
+                        LOGD("Commit item spawn! 3")
+                        Instantiate(Items.accelerator, itemPositionFront, q);
+                        break;
+                    case 6:
+                        LOGD("Commit item spawn! 4")
+                        Instantiate(Items.bridgecrank, itemPositionFront, q);
+                        break;
+                    case 7:
+                        LOGD("Commit item spawn! 5")
+                        Instantiate(Items.coconut, itemPositionFront, q);
+                        break;
+                    case 8:
+                        LOGD("Commit item spawn! 6")
+                        Instantiate(Items.coin, itemPositionFront, q);
+                        break;
+                    case 9:
+                        LOGD("Commit item spawn! 7")
+                        Instantiate(Items.crowbar, itemPositionFront, q);
+                        break;
+                    case 10:
+                        LOGD("Commit item spawn! 8")
+                        Instantiate(Items.doorActivator, itemPositionFront, q);
+                        break;
+                    case 11:
+                        LOGD("Commit item spawn! 9")
+                        Instantiate(Items.electricSwitch, itemPositionFront, q);
+                        break;
+                    case 12:
+                        LOGD("Commit item spawn! 10")
+                        Instantiate(Items.firewood, itemPositionFront, q);
+                        break;
+                    case 13:
+                        LOGD("Commit item spawn! 11")
+                        Instantiate(Items.gatefuse, itemPositionFront, q);
+                        break;
+                    case 14:
+                        LOGD("Commit item spawn! 12")
+                        Instantiate(Items.gencable, itemPositionFront, q);
+                        break;
+                    case 15:
+                        LOGD("Commit item spawn! 13")
+                        Instantiate(Items.matches, itemPositionFront, q);
+                        break;
+                    case 16:
+                        LOGD("Commit item spawn! 14")
+                        Instantiate(Items.padlockkey, itemPositionFront, q);
+                        break;
+                    case 17:
+                        LOGD("Commit item spawn! 15")
+                        Instantiate(Items.planka, itemPositionFront, q);
+                        break;
+                    case 18:
+                        LOGD("Commit item spawn! 16")
+                        Instantiate(Items.safekey, itemPositionFront, q);
+                        break;
+                    case 19:
+                        LOGD("Commit item spawn! 17")
+                        Instantiate(Items.shedkey, itemPositionFront, q);
+                        break;
+                    case 20:
+                        LOGD("Commit item spawn! 18")
+                        Instantiate(Items.shotgun, itemPositionFront, q);
+                        break;
+                    case 21:
+                        LOGD("Commit item spawn! 19")
+                        Instantiate(Items.slingshot, itemPositionFront, q);
+                        break;
+                    case 22:
+                        LOGD("Commit item spawn! 20")
+                        Instantiate(Items.teddy, itemPositionFront, q);
+                        break;
+                    case 23:
+                        LOGD("Commit item spawn! 21")
+                        Instantiate(Items.trainKey, itemPositionFront, q);
+                        break;
+                    case 24:
+                        LOGD("Commit item spawn! 22")
+                        Instantiate(Items.vas, itemPositionFront, q);
+                        break;
+                    case 25:
+                        LOGD("Commit item spawn! 23")
+                        Instantiate(Items.vas, itemPositionFront, q);
+                        break;
+                    case 26:
+                        LOGD("Commit item spawn! 24")
+                        Instantiate(Items.vas2, itemPositionFront, q);
+                        break;
+                    case 27:
+                        LOGD("Commit item spawn! 25")
+                        Instantiate(Items.weaponkey, itemPositionFront, q);
+                        break;
+                }
+                ItemSpawnCommit = false;
+            }
+
+        }
+    }
+    old_SetupItemPtrs(_);
+}
 void ImGui_ImplOpenGLHook(){
     void* stencilSym = dlsym(glHandle, "glStencilMask");
     const char *dlsym_error3 = dlerror();
@@ -1082,6 +1257,8 @@ void HookMods(){
     set_timeScale =  (void (*)(float)) getRealAddrOfLibrary(targetLibName, 0xADEB1C);
     set_pos  =  (void(*)(void*, Vector3)) getRealAddrOfLibrary(targetLibName, 0xADF850);
     get_pos   =  (Vector3(*)(void*)) getRealAddrOfLibrary(targetLibName, 0xADF778);
+    get_rot   =  (Quaternion(*)(void*)) getRealAddrOfLibrary(targetLibName, 0xADFB54);
+
     set_enabled   =  (void(*)(void*, bool)) getRealAddrOfLibrary(targetLibName, 0xD08D70);
     Instantiate = (void*(*)(void*, Vector3, Quaternion)) getRealAddrOfLibrary(targetLibName, 0x949158);
       MSHookFunction((void *) getRealAddrOfLibrary(targetLibName, 0x698E44),

@@ -1,6 +1,7 @@
 package androidx.viewbinding.systemui;
 import com.unity3d.player.UnityPlayer;
 import android.app.Activity;
+import android.content.Context;
 import android.os.Bundle;
 public class SurfaceEmbedActivity extends Activity {
     // Used to load the 'imgui' library on application startup.

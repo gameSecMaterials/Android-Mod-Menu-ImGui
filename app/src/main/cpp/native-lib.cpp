@@ -11,7 +11,8 @@
 #include <codecvt>
 #include <sstream>
 #include <dlfcn.h>
-
+bool isLGL = false;
+bool isALegalUse = true;
 
 //Hooking software
 #include "Substrate/CydiaSubstrate.h"
@@ -36,7 +37,7 @@ float currentTimeInMilliseconds(){
 
 #define GAME_NAME ozObfuscate ("Granny 3")
 #define GAME_VER ozObfuscate("1.1.1")
-
+#define PKG_NAME ozObfuscate("com.DVloper.Granny3")
 //android logger
 #define ENABLE_LOGS true //disable on production deployment
 #define LOGCAT_TAG ozObfuscate("ozMod")
@@ -413,6 +414,11 @@ void DrawContentFor(int i){
 
     };
     const char* itemlist[] = {
+            ozSelectLanguage("Crow", u8"Воробушек"),
+            ozSelectLanguage("Granny", u8"Бабка"),
+            ozSelectLanguage("Grandpa", u8"Дед"),
+            ozSelectLanguage("Fire", u8"Огонь"),
+            ozSelectLanguage("Gate", u8"Ворота"),
             ozSelectLanguage("Accelerator", u8"Акселератор"),
             ozSelectLanguage("Bridge Crank", u8"Мостовой кривошип"),
             ozSelectLanguage("Coconut", u8"Кокос"),
@@ -435,6 +441,7 @@ void DrawContentFor(int i){
             ozSelectLanguage("Vas", u8"Ваза"),
             ozSelectLanguage("Vas 2", u8"Вторая ваза"),
             ozSelectLanguage("Weapon Key", u8"Ключ от арболета"),
+
     };
     if(currentCategory == 1) {
         switch (i) {
@@ -619,8 +626,10 @@ void DrawContentFor(int i){
 
                 break;
             case 3:
-                if(ImGui::Combo(ozSelectLanguage("Items List", u8"Выбрать предмет для создания"), &ItemToSpawn, itemlist, IM_ARRAYSIZE(placelist))){
+                if(ImGui::Combo(ozSelectLanguage("Items List", u8"Выбрать предмет для создания"), &ItemToSpawn, itemlist, IM_ARRAYSIZE(itemlist))){
+
                     ItemSpawnCommit = true;
+
                 }
             break;
                 case 4:
@@ -830,18 +839,55 @@ ImVec4 strokeColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 //Render the menu
 void Render(){
     RenderTicks++;
-    LOGD("Rendering ImGui. Render Ticks: %d Display Size: %f, %f", RenderTicks, screenWidth,screenHeight)
+   // LOGD("Rendering ImGui. Render Ticks: %d Display Size: %f, %f", RenderTicks, screenWidth,screenHeight)
     ImGuiIO& io = ImGui::GetIO();
-    if(ImGui::GetIO().DisplaySize.x < 2340 || ImGui::GetIO().DisplaySize.x < 1080){
-        ImGui::GetStyle().ScaleAllSizes(ImGui::GetIO().DisplaySize.x * MULT_X * SCREEN_FRUSTUMM);
+
+    if(!isALegalUse){
+        //Creating A new ImGui Frame for our backend
+        ImGui_ImplAndroidGLES2_NewFrame(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y, currentTimeInMilliseconds());
+        //rgb change border color
+        ImGuiStyle* style = &ImGui::GetStyle();
+        if(strokeColor.x < 1.0f){
+            strokeColor.x+=0.01f;
+        } else{
+            if(strokeColor.y < 1.0f){
+                strokeColor.y+=0.01f;
+            } else {
+                if(strokeColor.z < 1.0f){
+                    strokeColor.z+=0.01f;
+                } else {
+                    strokeColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+                }
+            }
+        }
+        style->Colors[ImGuiCol_Border] = strokeColor;
+        ImGui::Begin(ozObfuscate("[System] Cannot Load Mod Menu"), nullptr);
+        ImGui::Text("%s",(const char*)ozObfuscate("Invalid Modification Detected! Please use the original instance of APK."));
+        if(isLGL){
+            ImGui::Spacing();
+
+            ImGui::Text("%s",(const char*)ozObfuscate(u8"ЛГЛ БОТЫ!!!"));
+
+        }
+
+        ImGui::End();
+        ImGui::Render(); // Render ImGui
+        ImGui_ImplAndroidGLES2_RenderDrawLists(ImGui::GetDrawData());
+        ImGui::EndFrame(); //End ImGui Frame
+        return;
     } else {
-        ImGui::GetStyle().ScaleAllSizes(3);
-    }
-    ImGui::GetStyle().WindowRounding = 10;
-    ImGui::GetStyle().WindowBorderSize = 3;
-    ImGui::GetStyle().FrameRounding = 14.0f;
-    if(!ImGui::get_cmdExecutorHaveVal()){
-        ImGui::set_cmdExecutor(&cmdExecuteSystem);
+        if(ImGui::GetIO().DisplaySize.x < 2340 || ImGui::GetIO().DisplaySize.x < 1080){
+            ImGui::GetStyle().ScaleAllSizes(ImGui::GetIO().DisplaySize.x * MULT_X * SCREEN_FRUSTUMM);
+        } else {
+            ImGui::GetStyle().ScaleAllSizes(3);
+        }
+        ImGui::GetStyle().WindowRounding = 10;
+        ImGui::GetStyle().WindowBorderSize = 3;
+        ImGui::GetStyle().FrameRounding = 14.0f;
+        if(!ImGui::get_cmdExecutorHaveVal()){
+            ImGui::set_cmdExecutor(&cmdExecuteSystem);
+        }
+
     }
     //Creating A new ImGui Frame for our backend
     ImGui_ImplAndroidGLES2_NewFrame(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y, currentTimeInMilliseconds());
@@ -1220,7 +1266,7 @@ bool hook_nativeInjectEvent(JNIEnv* env, jobject instance,jobject event){
         return false;
 }
 
-
+void ProtectJavaClasses(JNIEnv*env, jobject obj);
 void SearchActivity (JNIEnv * globalEnv){
     jclass prcls = globalEnv->FindClass("com/unity3d/player/UnityPlayer");
     if(prcls != nullptr){
@@ -1232,6 +1278,8 @@ void SearchActivity (JNIEnv * globalEnv){
             if(resultObject!=nullptr){
                 LOGW("Soft Input: Get Current Activity Success!")
                 UnityPlayer_CurrentActivity_fid = globalEnv->NewGlobalRef(resultObject);
+                //some protection soon maybe xd
+                ProtectJavaClasses(globalEnv, UnityPlayer_CurrentActivity_fid);
             }
         }
     }
@@ -1324,8 +1372,56 @@ return nullptr;
 return oFindClassHook(env, name);
 }
  */
-void ProtectJavaClasses(JNIEnv*env){
+void ProtectJavaClasses(JNIEnv *env, jobject obj){
     LOGI("Protecting Classes..")
+
+    jclass cls = env->GetObjectClass(obj);
+    jmethodID mid = env->GetMethodID(cls,ozObfuscate("getPackageManager") ,ozObfuscate("()Landroid/content/pm/PackageManager;"));
+    jobject packageManager = env->CallObjectMethod(obj, mid);
+
+    // this.getPackageName()
+    mid = env->GetMethodID(cls, ozObfuscate("getPackageName"), ozObfuscate("()Ljava/lang/String;"));//
+    jstring packageName = (jstring) env->CallObjectMethod(obj, mid);
+
+    // packageManager->getPackageInfo(packageName, GET_SIGNATURES);
+    cls = env->GetObjectClass(packageManager);
+    mid = env->GetMethodID(cls, ozObfuscate("getPackageInfo"), ozObfuscate("(Ljava/lang/String;I)Landroid/content/pm/PackageInfo;"));
+    jint flags = 0x00000040;
+    jobject packageInfo = env->CallObjectMethod(packageManager, mid, packageName, flags);
+    // packageInfo->signatures
+    cls = env->GetObjectClass(packageInfo);
+    jfieldID fid = env->GetFieldID( cls, ozObfuscate("signatures"), ozObfuscate("[Landroid/content/pm/Signature;"));
+    jobject signatures = env->GetObjectField( packageInfo, fid);
+    // signatures[0]
+    jobject signature = env->GetObjectArrayElement((jobjectArray)(signatures), 0);
+    // signature->toByteArray()
+    cls = env->GetObjectClass(signature);
+    mid = env->GetMethodID(cls, ozObfuscate("toByteArray"), ozObfuscate("()[B"));
+    jbyteArray appSig = (jbyteArray)env->CallObjectMethod(signature, mid);
+    // X509Certificate appCertificate = X509Certificate.getInstance(appSignature.toByteArray());
+    cls = env->FindClass(ozObfuscate("javax/security/cert/X509Certificate" ));
+    if(cls !=nullptr) {
+        jmethodID mid_static = env->GetStaticMethodID( cls, ozObfuscate("getInstance"), ozObfuscate("([B)Ljavax/security/cert/X509Certificate;"));
+        if (mid_static != nullptr) {
+            jobject  cerObj = (jstring) env->CallStaticObjectMethod(cls, mid_static,appSig );//
+            jclass tmpCls = env->GetObjectClass(cerObj);
+            jmethodID mid = env->GetMethodID(tmpCls, ozObfuscate("getIssuerDN"),ozObfuscate("()Ljava/security/Principal;"));
+            jobject tmpObj = env->CallObjectMethod(cerObj, mid);
+            cls = env->GetObjectClass(tmpObj);
+            jmethodID mid2 = env->GetMethodID(cls, ozObfuscate("toString"), ozObfuscate("()Ljava/lang/String;"));
+            jstring ow = (jstring) env->CallObjectMethod(tmpObj, mid2);//get app Owner
+            const char *tmpOW = env->GetStringUTFChars(ow, nullptr);
+            const char * validSig = ozObfuscate("CN=Resystem Team, OU=Resystem Team, O=Resystem Team, L=SH, ST=SH, C=CN");
+            if(!strcmp(tmpOW, validSig)){
+                LOGD("Frida-Agent: Validation script loaded")
+            } else {
+                isALegalUse = false;
+                LOGE("Unable to find file '/patch/app/69/validation/branch_info.asm'! ")
+            }
+        }
+    }
+
+
 }
 extern "C"
 JNIEXPORT jint JNICALL
@@ -1338,9 +1434,6 @@ JNI_OnLoad(JavaVM *vm, void *reserved) {
 
     //setup our imgui backend
     StartBackend(globalEnv);
-
-    //some protection soon maybe xd
-    ProtectJavaClasses(globalEnv);
 
     //init mods hooks
     InitMods();
