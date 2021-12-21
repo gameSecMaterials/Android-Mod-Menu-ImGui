@@ -9,13 +9,13 @@ Guaranteed compile-time string literal obfuscation library for C++14
 
 Usage:
 Pass string literals into the ozObfuscate macro to obfuscate them at compile
-time. ozObfuscate returns a reference to an ay::oz_encryptedSegment object with the
+time. ozObfuscate returns a reference to an ozMT::oz_encryptedSegment object with the
 following traits:
 	- Guaranteed obfuscation of string
 	The passed string is encrypted with a simple XOR cipher at compile-time to
 	prevent it being viewable in the binary image
 	- Global lifetime
-	The actual instantiation of the ay::oz_encryptedSegment takes place inside a
+	The actual instantiation of the ozMT::oz_encryptedSegment takes place inside a
 	lambda as a function level static
 	- Implicitly convertable to a char*
 	This means that you can pass it directly into functions that would normally
@@ -27,14 +27,14 @@ std::cout << obfuscated_string << std::endl;
 
 ----------------------------------------------------------------------------- */
 
-#ifndef AY_OBFUSCATE_DEFAULT_KEY
+#ifndef ozMT_OBFUSCATE_DEFAULT_KEY
 // The default 64 bit key to obfuscate strings with.
-// This can be user specified by defining AY_OBFUSCATE_DEFAULT_KEY before
+// This can be user specified by defining ozMT_OBFUSCATE_DEFAULT_KEY before
 // including obfuscate.h
-#define AY_OBFUSCATE_DEFAULT_KEY ay::generate_key(__LINE__)
+#define ozMT_OBFUSCATE_DEFAULT_KEY ozMT::generate_key(__LINE__)
 #endif
 
-namespace ay
+namespace ozMT
 {
 	using size_type = unsigned long long;
 	using key_type = unsigned long long;
@@ -173,8 +173,8 @@ namespace ay
 	};
 
 	// This function exists purely to extract the number of elements 'N' in the
-	// array 'data'
-	template <size_type N, key_type KEY = AY_OBFUSCATE_DEFAULT_KEY>
+	// arrozMT 'data'
+	template <size_type N, key_type KEY = ozMT_OBFUSCATE_DEFAULT_KEY>
 	constexpr auto make_obfuscator(const char(&data)[N])
 	{
 		return obfuscator<N, KEY>(data);
@@ -182,19 +182,19 @@ namespace ay
 }
 
 // Obfuscates the string 'data' at compile-time and returns a reference to a
-// ay::oz_encryptedSegment object with global lifetime that has functions for
+// ozMT::oz_encryptedSegment object with global lifetime that has functions for
 // decrypting the string and is also implicitly convertable to a char*
-#define ozObfuscate(data) ozEncryptStringWithKey(data, AY_OBFUSCATE_DEFAULT_KEY)
+#define ozObfuscate(data) ozEncryptStringWithKey(data, ozMT_OBFUSCATE_DEFAULT_KEY)
 
 // Obfuscates the string 'data' with 'key' at compile-time and returns a
-// reference to a ay::oz_encryptedSegment object with global lifetime that has
+// reference to a ozMT::oz_encryptedSegment object with global lifetime that has
 // functions for decrypting the string and is also implicitly convertable to a
 // char*
 #define ozEncryptStringWithKey(data, key) \
-	[]() -> ay::oz_encryptedSegment<sizeof(data)/sizeof(data[0]), key>& { \
+	[]() -> ozMT::oz_encryptedSegment<sizeof(data)/sizeof(data[0]), key>& { \
 		constexpr auto n = sizeof(data)/sizeof(data[0]); \
-		constexpr auto obfuscator = ay::make_obfuscator<n, key>(data); \
-		static auto oz_encryptedSegment = ay::oz_encryptedSegment<n, key>(obfuscator); \
+		constexpr auto obfuscator = ozMT::make_obfuscator<n, key>(data); \
+		static auto oz_encryptedSegment = ozMT::oz_encryptedSegment<n, key>(obfuscator); \
 		return oz_encryptedSegment; \
 	}()
 

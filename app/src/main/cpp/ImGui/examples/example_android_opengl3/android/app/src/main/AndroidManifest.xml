@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="imgui.example.android">
+    package="ImGui.example.android">
 
     <application
         android:label="ImGuiExample"
@@ -9,7 +9,7 @@
         android:hasCode="true">
 
         <activity
-            android:name="imgui.example.android.MainActivity"
+            android:name="ImGui.example.android.MainActivity"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="orientation|keyboardHidden|screenSize">
             <meta-data android:name="android.app.lib_name"

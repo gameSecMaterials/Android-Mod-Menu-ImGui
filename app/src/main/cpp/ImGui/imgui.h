@@ -1818,6 +1818,7 @@ struct ImGuiStyle
 
     IMGUI_API ImGuiStyle();
     IMGUI_API void ScaleAllSizes(float scale_factor);
+    IMGUI_API void ResetAllSizes();
 };
 
 //-----------------------------------------------------------------------------

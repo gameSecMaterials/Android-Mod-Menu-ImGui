@@ -1,56 +1,141 @@
-#include "obfuscator.hpp"
-#include <GLES2/gl2.h>
-#include "EGL/egl.h"
+#include "obfuscator.hpp" //Compile-Time String Obfuscator
 
-#include <android/asset_manager_jni.h>
-JavaVM *publicJVM;
-#include "sys/time.h"
-void Render();
-static void UpdateInput();
-int inputChar = 0;
-long long currentTimeInMilliseconds(){
+#include <vector> //std vector
+#include <ctime> // time header to support timeval structure
+#include <unistd.h> //uni std
+#include <pthread.h> // pthread header
+#include <string>//std string
+#include <set> //std set (bionic linker)
+#include <iostream>
+#include <locale>
+#include <codecvt>
+#include <sstream>
+#include <dlfcn.h>
+
+
+//Hooking software
+#include "Substrate/CydiaSubstrate.h"
+#include "Dobby-master/include/dobby.h"
+
+float currentTimeInMilliseconds(){
     struct timeval tv;
     gettimeofday(&tv, nullptr);
     return ((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
 }
 
-bool setupGraphics(int width, int height);
+#include "ImGui_Impl_AndroidOpenGL2.h" // my gui implementation
 
-int startTime, screenWidth, screenHeight;
-int currentLang = 1;
+#include "EGL/egl.h"  // EGL
+#include "GLES3/gl3.h"
+
+//android
+#include <android/asset_manager_jni.h> //JNI + JNI Asset Manager
+#include <android/native_window.h> // native window header is used to
+#include <android/input.h> //input consts
+#include <android/log.h>
+
+#define GAME_NAME ozObfuscate ("Granny 3")
+#define GAME_VER ozObfuscate("1.1.1")
+
+//android logger
+#define ENABLE_LOGS true //disable on production deployment
+#define LOGCAT_TAG ozObfuscate("ozMod")
+#define LOGI(...) if(ENABLE_LOGS){ __android_log_print(ANDROID_LOG_INFO,LOGCAT_TAG, __VA_ARGS__); }
+#define  LOGE(...)  if(ENABLE_LOGS){ __android_log_print(ANDROID_LOG_ERROR,LOGCAT_TAG,__VA_ARGS__); }
+#define  LOGD(...)  if(ENABLE_LOGS){ __android_log_print(ANDROID_LOG_DEBUG,LOGCAT_TAG,__VA_ARGS__); }
+#define  LOGDE(...) if(ENABLE_LOGS){  __android_log_print(ANDROID_LOG_DEFAULT,LOGCAT_TAG,__VA_ARGS__);}
+#define  LOGW(...)  if(ENABLE_LOGS){ __android_log_print(ANDROID_LOG_WARN,LOGCAT_TAG,__VA_ARGS__); }
+#define  LOGV(...)  if(ENABLE_LOGS){ __android_log_print(ANDROID_LOG_VERBOSE,LOGCAT_TAG,__VA_ARGS__); }
+#define  LOGF(...)  if(ENABLE_LOGS){ __android_log_print(ANDROID_LOG_FATAL,LOGCAT_TAG,__VA_ARGS__); }
+#define  LOGU(...)  if(ENABLE_LOGS){ __android_log_print(ANDROID_LOG_UNKNOWN,LOGCAT_TAG,__VA_ARGS__); }
+#define  LOGS(...)  if(ENABLE_LOGS){ __android_log_print(ANDROID_LOG_SLIENT,LOGCAT_TAG,__VA_ARGS__); }
+
+
+/*
+	Все координаты GUI-элементов задаются
+	относительно разрешения 1920x1080
+*/
+#define MULT_X	0.000520833333334f	// 1/1920
+#define MULT_Y	0.00092592592f 	// 1/1080
+#define SCREEN_FRUSTUMM 2.461999
+
+
+int currentCategory = 0;
+void Render();
+void UpdateInput();
+bool setupGraphics(int width, int height);
+int inputChar = 0;
+float startTime, screenWidth, screenHeight;
+int RenderTicks = 0;
+
+
+unsigned long findLibraryBaseAddress(const char *library) {
+    const char *filename;
+    char buffer[1024] = { 0 };
+    FILE *fp = nullptr;
+    unsigned long address = 0;
+    filename = ozObfuscate("/proc/self/maps");
+    fp = fopen(filename, ozObfuscate("rt"));
+    if (fp == nullptr) {
+        LOGE("%s", "Access Denied to Open /proc/self/maps!")
+        return 0;
+    }
+    while (fgets(buffer, sizeof(buffer), fp)) {
+        if (strstr(buffer, library)) {
+            address = (unsigned long) strtoul(buffer, nullptr, 16);
+            fclose(fp);
+            return address;
+        }
+    }
+}
+
+unsigned long getRealAddrOfLibrary(const char *libraryName, unsigned long relativeAddr) {
+    uintptr_t baseAddress = findLibraryBaseAddress(libraryName);
+    return baseAddress == 0 ? 0 : ((unsigned long)baseAddress + relativeAddr);
+}
+
+bool isLibraryLoaded(const char *libraryName) {
+    char line[512] = {0};
+    __sFILE* fp = fopen(ozObfuscate("/proc/self/maps"), ozObfuscate("rt"));
+    if (fp != nullptr) {
+        while (fgets(line, sizeof(line), fp)) {
+            if (strstr(line, libraryName)) {
+                return true;
+            }
+        }
+        fclose(fp);
+    }
+    return false;
+}
+
+#include "Mods.h" // Mods Header
+#include "ImGui/imgui_internal.h"
+
+jobject getGlobalContext(JNIEnv *env)
+{
+    jclass activityThread = env->FindClass("android/app/ActivityThread");
+    jmethodID currentActivityThread = env->GetStaticMethodID(activityThread, ozObfuscate("currentActivityThread"), ozObfuscate("()Landroid/app/ActivityThread;"));
+    jobject at = env->CallStaticObjectMethod(activityThread, currentActivityThread);
+    jmethodID getApplication = env->GetMethodID(activityThread, ozObfuscate("getApplication"), ozObfuscate("()Landroid/app/Application;"));
+    return env->CallObjectMethod(at, getApplication);
+} //get context by ActivityThread.currentActivityThread.getApplication(). android.app.ActivityThread is a hidden java class in android core
+
+JavaVM *publicJVM; //Public Java Virtual Machine
+
+//localization
+int currentLang = 0;
+#define ozSelectLanguage(en, ru) currentLang == 1 ? ozObfuscate(ru) : ozObfuscate(en)
 
 jobject activity;
 class ImDrawData;
 
-void ImGui_ImplAndroidGLES2_RenderDrawLists(ImDrawData*data);
+bool HandleInputEvent(JNIEnv *env, int motionEvent, int x, int y, int p);
 
-#include "GLES3/gl3.h"
-
-#include <string>
-#include <android/input.h>
-#include <android/log.h>
-#define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"ozMod", __VA_ARGS__))
-#define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR,"ozMod",__VA_ARGS__)
-#define  LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG,"ozMod",__VA_ARGS__)
-#define  LOGDE(...)  __android_log_print(ANDROID_LOG_DEFAULT,"ozMod",__VA_ARGS__)
-#define  LOGW(...)  __android_log_print(ANDROID_LOG_WARN,"ozMod",__VA_ARGS__)
-#define  LOGV(...)  __android_log_print(ANDROID_LOG_VERBOSE,"ozMod",__VA_ARGS__)
-#define  LOGF(...)  __android_log_print(ANDROID_LOG_FATAL,"ozMod",__VA_ARGS__)
-#define  LOGU(...)  __android_log_print(ANDROID_LOG_UNKNOWN,"ozMod",__VA_ARGS__)
-#define  LOGS(...)  __android_log_print(ANDROID_LOG_SLIENT,"ozMod",__VA_ARGS__)
-static void checkGlError(const char* op) {
-    for (GLint error = glGetError(); error; error
-                                                    = glGetError()) {
-        LOGI("after %s() glError (0x%x)\n", op, error);
-    }
-}
-bool HandleInputEvent(JNIEnv *jenv,
-int motionEvent, int x, int y,
-int p);
 jobject UnityPlayer_CurrentActivity_fid;
-void diplayKeyboard(JNIEnv* newEnv) {
-    LOGI("Display keybrd");
-    JNIEnv* env = NULL;
+
+void displayKeyboard(JNIEnv* newEnv) {
+    LOGI("Display keybrd")
+    JNIEnv* env = nullptr;
     if(newEnv != nullptr){
         env = newEnv;
     } else {
@@ -58,12 +143,11 @@ void diplayKeyboard(JNIEnv* newEnv) {
         if (jni_return == JNI_ERR){
             return;
         }
-        jni_return = publicJVM->AttachCurrentThread(&env, NULL);
+        jni_return = publicJVM->AttachCurrentThread(&env, nullptr);
         if (jni_return != JNI_OK){
             return;
         }
     }
-
     jclass aycls = env->FindClass("android/app/Activity");
     jmethodID gss = env->GetMethodID(aycls, "getSystemService",
                                      "(Ljava/lang/String;)Ljava/lang/Object;");
@@ -72,29 +156,9 @@ void diplayKeyboard(JNIEnv* newEnv) {
     jmethodID tgsifm = env->GetMethodID(imcls, "toggleSoftInput", "(II)V");
     env->CallVoidMethod(ss, tgsifm, 2,0);
 }
-#include <vector>
-#include "Substrate/CydiaSubstrate.h"
-#include "imgui_impl_android.h"
-#include "Mods.h"
 
-static jobject getGlobalContext(JNIEnv *env)
-{
-    jclass activityThread = env->FindClass("android/app/ActivityThread"); //Don't care about that error. It didn't find class because its hidden android core class.
-    jmethodID currentActivityThread = env->GetStaticMethodID(activityThread, ozObfuscate("currentActivityThread"), ozObfuscate("()Landroid/app/ActivityThread;"));
-    jobject at = env->CallStaticObjectMethod(activityThread, currentActivityThread);
 
-    jmethodID getApplication = env->GetMethodID(activityThread, ozObfuscate("getApplication"), ozObfuscate("()Landroid/app/Application;"));
-    jobject context = env->CallObjectMethod(at, getApplication);
-    return context;
-}
-
- bool m_needClearMousePos;
-typedef enum {
-    TOUCH_ACTION_DOWN = 0,
-    TOUCH_ACTION_UP,
-    TOUCH_ACTION_MOVE,
-    TOUCH_ACTION_COUNT
-} TOUCH_ACTION;
+typedef enum { TOUCH_ACTION_DOWN = 0, TOUCH_ACTION_UP, TOUCH_ACTION_MOVE } TOUCH_ACTION;
 
 typedef struct {
     TOUCH_ACTION action;
@@ -105,7 +169,7 @@ typedef struct {
     float x_velocity;
 }TOUCH_EVENT;
  TOUCH_EVENT g_LastTouchEvent;
-static void UpdateInput() {
+ void UpdateInput() {
     // Update buttons
     ImGuiIO &io = ImGui::GetIO();
 
@@ -116,12 +180,8 @@ static void UpdateInput() {
     // TOUCH_ACTION_DOWN -> MouseDown[0] true, left button
     // TOUCH_ACTION_UP -> MouseDown[0] false. left button
     // TOUCH_ACTION_POINTER_DOWN -> multi finger as scroll, set MouseWheel. MouseWheelH not used
-    if (TOUCH_ACTION_DOWN <= g_LastTouchEvent.action &&
-        g_LastTouchEvent.action <= TOUCH_ACTION_MOVE) {
 
-        io.MousePos.x = g_LastTouchEvent.x;
-        io.MousePos.y = g_LastTouchEvent.y;
-    }
+
     switch (g_LastTouchEvent.action) {
         case TOUCH_ACTION_MOVE:
             if (g_LastTouchEvent.pointers > 1) {
@@ -144,48 +204,44 @@ static void UpdateInput() {
     }
 }
 
-bool    HandleInputEvent(JNIEnv *jenv,
-                                                                 int motionEvent, int x, int y,
-                                                                 int p) {
+bool  HandleInputEvent(JNIEnv *env, int motionEvent, int x, int y, int p) {
     // Need to make sure the coordinate (x,y) here is relative to the top left of the surface
     // This is how the behavior of GLSurfaceView.onTouchEvent
     // If the coordinate is obtained in a different way. This should be adjusted accordingly
-    if (motionEvent < TOUCH_ACTION_COUNT) {
-        float velocity_y = (float)((float)y - g_LastTouchEvent.y) / 100.f;
-        g_LastTouchEvent = {.action = (TOUCH_ACTION) motionEvent, .x = static_cast<float>(x), .y = static_cast<float>(y), .pointers = p, .y_velocity = velocity_y};
+    LOGI("Touch %d_%d", motionEvent, p)
+    float velocity_y = (float)((float)y - g_LastTouchEvent.y) / 100.f;
+    g_LastTouchEvent = {.action = (TOUCH_ACTION) motionEvent, .x = static_cast<float>(x), .y = static_cast<float>(y), .pointers = p, .y_velocity = velocity_y};
+    ImGuiIO &io = ImGui::GetIO();
+    io.MousePos.x = g_LastTouchEvent.x;
+    io.MousePos.y = g_LastTouchEvent.y;
+    if(motionEvent == 2){
+        if (g_LastTouchEvent.pointers > 1) {
+            io.MouseWheel = g_LastTouchEvent.y_velocity;
+            io.MouseDown[0] = false;
+        }
+        else {
+            io.MouseWheel = 0;
+        }
     }
-    else {
-        //LOGE("invalid action index: %d", motionEvent);
+    if(motionEvent == 0){
+        io.MouseDown[0] = true;
     }
-    //LOGI("x: %d y: %d", x, y);
+    if(motionEvent == 1){
+        io.MouseDown[0] = false;
+    }
     return true;
 }
-
-ImVec4 imClearColor;
-bool showTestWindow;
-bool showAnotherWindow;
-
-static void printGLString(const char *name, GLenum s) {
-    const char *v = (const char *) glGetString(s);
-    LOGI(ozObfuscate("GL %s = %s\n"), name, v);
-}
-GLuint gProgram;
-GLuint gvPositionHandle;
-GLuint vbo;
-const GLfloat gTriangleVertices[] = { 0.0f, 1.0f, -1.0f, -1.0f,
-                                      1.0f, -1.0f };
 void ozTheme()
 {
     ImGuiStyle* style = &ImGui::GetStyle();
-
     style->WindowBorderSize = 3;
+
     style->WindowTitleAlign = ImVec2(0.5, 0.5);
     style->WindowMinSize = ImVec2(900, 430);
-    style->Colors[ImGuiCol_Border] = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+    style->FrameRounding = 12.0f;
+    style->GrabRounding = 12.0f;
     style->Colors[ImGuiCol_BorderShadow] = ImVec4(1.0f, 0.1f, 0.1f, 1.0f);
-
     style->Colors[ImGuiCol_CheckMark] = ImVec4(1.0f, 0.0f, 0.0f, 1.00f);
-   // style->FramePadding = ImVec2(8, 6);
     style->Colors[ImGuiCol_Button] = ImColor(31, 30, 31, 255);
     style->Colors[ImGuiCol_ButtonActive] = ImColor(41, 40, 41, 255);
     style->Colors[ImGuiCol_ButtonHovered] = ImColor(41, 40, 41, 255);
@@ -195,37 +251,17 @@ void ozTheme()
     style->Colors[ImGuiCol_Separator] = ImColor(70, 70, 70, 255);
     style->Colors[ImGuiCol_SeparatorActive] = ImColor(76, 76, 76, 255);
     style->Colors[ImGuiCol_SeparatorHovered] = ImColor(76, 76, 76, 255);
-
-    style->Colors[ImGuiCol_FrameBg] = ImColor(37, 36, 0, 255);
-    style->Colors[ImGuiCol_FrameBgActive] = ImColor(37, 36, 37, 255);
     style->Colors[ImGuiCol_FrameBgHovered] = ImColor(37, 36, 37, 255);
-    //style->Colors[ImGuiCol_ScrollbarBg] = ImColor(37, 36, 37, 255);
     style->Colors[ImGuiCol_Header] = ImColor(0, 0, 0, 0);
     style->Colors[ImGuiCol_HeaderActive] = ImColor(0, 0, 0, 255);
     style->Colors[ImGuiCol_HeaderHovered] = ImColor(46, 46, 46, 255);
 }
-
-// Unfortunately, the native KeyEvent implementation has no getUnicodeChar() function.
-// Therefore, we implement the processing of KeyEvents in MainActivity.kt and poll
-// the resulting Unicode characters here via JNI and send them to Dear ImGui.
-static int UpdateKeyboardInput(JNIEnv*java_env)
-{
-    // Send the actual characters to Dear ImGui
-    ImGuiIO& io = ImGui::GetIO();
-
-    if (inputChar != 0){
-        io.AddInputCharacter(inputChar);
-        inputChar = 0;
-    }
-    return 0;
-}
-#include "tabs.h"
-
-bool setupGraphics(int w, int h) {
+bool setupGraphics(float w, float h) {
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
+
     ImGui::StyleColorsDark();
     ozTheme();
     ImGui::GetStyle().WindowRounding = 10;
@@ -235,7 +271,6 @@ bool setupGraphics(int w, int h) {
     // Disable loading/saving of .ini file from disk.
     // FIXME: Consider using LoadIniSettingsFromMemory() / SaveIniSettingsToMemory() to save in appropriate location for Android.
     io.IniFilename =  nullptr;
-    ImGui_ImplAndroidGLES2_Init();
     // Setup keyboard input
     io.KeyMap[ImGuiKey_Tab] = AKEYCODE_TAB;
     io.KeyMap[ImGuiKey_LeftArrow] = AKEYCODE_DPAD_LEFT;   // also covers physical keyboard arrow key
@@ -247,7 +282,6 @@ bool setupGraphics(int w, int h) {
     io.KeyMap[ImGuiKey_Home] = AKEYCODE_MOVE_HOME;
     io.KeyMap[ImGuiKey_End] = AKEYCODE_MOVE_END;
     io.KeyMap[ImGuiKey_Insert] = AKEYCODE_INSERT;
-
     io.KeyMap[ImGuiKey_Backspace] = 67;
     io.KeyMap[ImGuiKey_Space] = AKEYCODE_SPACE;
     io.KeyMap[ImGuiKey_Enter] = 66;
@@ -260,128 +294,28 @@ bool setupGraphics(int w, int h) {
     io.KeyMap[ImGuiKey_Y] = AKEYCODE_Y;
     io.KeyMap[ImGuiKey_Z] = AKEYCODE_Z;
 
-    ImGui::GetStyle().ScaleAllSizes(3);
     ImFontConfig font_cfg;
     font_cfg.SizePixels = 22.0f;
     font_cfg.GlyphRanges = io.Fonts->GetGlyphRangesCyrillic();
     io.Fonts->AddFontDefault(&font_cfg);
-
-    //setup GL drawing
-    glGenBuffers(1, &vbo);
-    checkGlError("glGenBuffer");
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    checkGlError("glBindBuffer");
-
-    glBufferData(GL_ARRAY_BUFFER, 6*sizeof(GLfloat), gTriangleVertices, GL_STATIC_DRAW);
-    checkGlError("glBufferData");
-
-    glVertexAttribPointer(gvPositionHandle, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid*)nullptr);
-    checkGlError("glVertexAttribPointer");
-
-    glEnableVertexAttribArray(gvPositionHandle);
-    checkGlError("glVertexAttribArray");
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    checkGlError("glBindBuffer");
-
-    glViewport(0,0,w,h);
-
     return true;
-}
-
-
-
-
-void button(const char* label, int& currentTab, int newTab, ImVec2 size)
-{
-    if (ImGui::Button(label, size))
-        currentTab = newTab;
-}
-
-void line(int newId)
-{
-    std::string id = ("imguipp_line_" + std::to_string(newId));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    {
-        ImGui::BeginChild(id.c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 1), false);
-        ImGui::Separator();
-        ImGui::EndChild();
-    }
-    ImGui::PopStyleColor();
-}
-void center_text(const char* text, int lineId , bool separator)
-{
-    if (text == nullptr)
-        return;
-
-    ImGui::Spacing();
-    ImGui::SameLine((ImGui::GetContentRegionAvail().x / 2) - (ImGui::CalcTextSize(text).x / 2));
-    ImGui::Text("%s", text);
-    ImGui::Spacing();
-
-    if (true == separator)
-        line(lineId);
-}
-
-void center_text_ex(const char* text, float width_available, int lineId,  bool separator)
-{
-    if (text == nullptr)
-        return;
-
-    ImGui::Spacing();
-    ImGui::SameLine((width_available / 2) - (ImGui::CalcTextSize(text).x / 2));
-    ImGui::Text("%s", text);
-    ImGui::Spacing();
-
-    if (true == separator)
-        line(lineId);
-}
-
-namespace other
-{
-    float get_window_size_x()
-    {
-        return ImGui::GetWindowSize().x;
-    }
-
-    float get_window_size_y()
-    {
-        return ImGui::GetWindowSize().y;
-    }
-
-    ImVec2 get_window_size()
-    {
-        return ImGui::GetWindowSize();
-    }
-
 }
 
 ImVec4 to_vec4(float r, float g, float b, float a)
 {
-    return ImVec4(r / 255.0, g / 255.0, b / 255.0, a / 255.0);
+    return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f);
 }
 static bool show_app_console = false;
 static bool show_app_log = false;
 static bool WantTextInputLast = false;
 bool show_paint = false;
 bool showStyleEditor;
-#define GAME_NAME "Granny 3"
-#define GAME_VER "1.1.1"
-class g_FontTexture;
+
 float testCol, testCol2, testCol3,testCol4;
 
-void chkBoxHandler(int i , bool a){
-       if(IgnoreLayerCollision){
-           IgnoreLayerCollision(0,8, a);
-       }
-
-    "Жмот";
-}
-
 void DrawContentFor(int i){
-
-    if(Settings::Tab == 0){
+    float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+    if(currentCategory == 0){
         switch(i){
             case 0:
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 255, 255));
@@ -406,10 +340,7 @@ void DrawContentFor(int i){
                 ImGui::Text("%s", (const char *)("    Omar Ocornut - for ImGui (GUI Realization)"));
                       ImGui::PopStyleColor();
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 50, 65, 255));
-                ImGui::Text("%s", (const char *)("    adamyaxley - for Protection and obfuscation (FCS Leader also)"));
-                ImGui::PopStyleColor();
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 255, 255));
-                ImGui::Text("%s", (const char *)("    Oifox or Octowolve (IDK) - for OpenGL hooking"));
+                ImGui::Text("%s", (const char *)("    adamyaxley, FCS Leader - for Protection and obfuscation (FCS Leader also)"));
                 ImGui::PopStyleColor();
                 ImGui::SetWindowFontScale(1);
                 break;
@@ -422,8 +353,8 @@ void DrawContentFor(int i){
                 ImGui::Text(("Dear ImGui Version: %s"), ImGui::GetVersion());
                 ImGui::Text(("Mod Menu FPS: %d (%f Frames)"), (int)io.Framerate, 1000 / io.Framerate);
                   ImGui::Separator();
-                ImGui::Text(("Game Name: %s"), GAME_NAME);
-                ImGui::Text(("Game Version: %s"), GAME_VER);
+                ImGui::Text(("Game Name: %s"), (const char*)GAME_NAME);
+                ImGui::Text(("Game Version: %s"), (const char*)GAME_VER);
                 ImGui::Separator();
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
                 ImGui::Text(("Dear ImGui Version: %s. Modded by ozMod."), IMGUI_VERSION);
@@ -433,7 +364,7 @@ void DrawContentFor(int i){
         }
     }
 
-    if(Settings::Tab == 2){
+    if(currentCategory == 2){
         switch(i) {
             case 0:
                 ImGui::Checkbox(("Draw ESP Behind Mod Menu"), &ESP.drawBehindMenu);
@@ -467,21 +398,55 @@ void DrawContentFor(int i){
                 break;
         }
     }
-    if(Settings::Tab == 1) {
+    const char* items[] = {
+            ozSelectLanguage("Granny", u8"Бабка"),
+            ozSelectLanguage("Grandpa", u8"Дед"),
+            ozSelectLanguage("Slendrina", u8"Слендрина"),
+            ozSelectLanguage("Crocodile", u8"Крокодил")
+    };
+    const char* placelist[] = {
+            ozSelectLanguage("Main Room", u8"Главная комната"), //10.810 -5.538 17.600
+            ozSelectLanguage("Train", u8"К поезду"),// 11.810001 -12.538391 10.6
+            ozSelectLanguage("Outside", u8"За дом"), //0.522 5 40
+            ozSelectLanguage("Shop Backroom", u8"Задняя комната магазина"), // 22.889 -16.162 -0.053
+            ozSelectLanguage("Old Bedroom", u8"Старая комната для отдыха") //-8.307 14.511 2.244
+
+    };
+    const char* itemlist[] = {
+            ozSelectLanguage("Accelerator", u8"Акселератор"),
+            ozSelectLanguage("Bridge Crank", u8"Мостовой кривошип"),
+            ozSelectLanguage("Coconut", u8"Кокос"),
+            ozSelectLanguage("Coin", u8"Монета"),
+            ozSelectLanguage("Crowbar", u8"Лом // Монитровка"),
+            ozSelectLanguage("Door Activatior", u8"Активатор дверей"),
+            ozSelectLanguage("Electric Switch", u8"Электрический переключатель"),
+            ozSelectLanguage("Firewood", u8"Дрова"),
+            ozSelectLanguage("Gate Fuse", u8"Предохранитель ворот"),
+            ozSelectLanguage("Generator Cable", u8"Кабель от генератора"),
+            ozSelectLanguage("Matches", u8"Спички"),
+            ozSelectLanguage("Padlock Key", u8"Синий ключ"),
+            ozSelectLanguage("Plank", u8"Доска"),
+            ozSelectLanguage("Safe Key", u8"Ключ от сейфа"),
+            ozSelectLanguage("Shed Key", u8"Ключ от сарая"),
+            ozSelectLanguage("Shotgun", u8"Дробовик"),
+            ozSelectLanguage("Slingshot", u8"Рогатка"),
+            ozSelectLanguage("Teddy", u8"Михаил петрович"),
+            ozSelectLanguage("Train Key", u8"Ключ от поезда"),
+            ozSelectLanguage("Vas", u8"Ваза"),
+            ozSelectLanguage("Vas 2", u8"Вторая ваза"),
+            ozSelectLanguage("Weapon Key", u8"Ключ от арболета"),
+    };
+    if(currentCategory == 1) {
         switch (i) {
             case 0:
-                const char* items[] = {
-                        ("Granny"),
-                        ("Grandpa"),
-                        ("Slendrina"),
-                        ("Monster")
-                };
 
-                if(ImGui::Combo(("Select Enemy"), &selectedEnemyGame, items, IM_ARRAYSIZE(items))){
+
+                if(ImGui::Combo(ozSelectLanguage("Select Enemy", u8"Выбрать врага"), &selectedEnemyGame, items, IM_ARRAYSIZE(items))){
                     selectedEnemyObj = EnemyEditor.enemies[selectedEnemyGame];
                 }
+
                if(!selectedEnemyObj->destroyed){
-                   if (ImGui::Button(("Set Active"), ImVec2(260 - 15, 81))){
+                   if (ImGui::Button(ozSelectLanguage("ON/OFF", u8"Выключить"), ImVec2(260 - 15, 81))){
                       if(selectedEnemyObj){
                           selectedEnemyObj->active = !selectedEnemyObj->active;
                           selectedEnemyObj->setActive = true;
@@ -490,136 +455,269 @@ void DrawContentFor(int i){
                 }
 
                 ImGui::SameLine();
-                if (ImGui::Button(("Destroy"), ImVec2(260 - 15, 81))){
+
+                if (ImGui::Button(ozSelectLanguage("Destroy", u8"Удалить с игры"), ImVec2(260 - 15, 81))){
                     if(selectedEnemyObj && !selectedEnemyObj->destroyed){
                         selectedEnemyObj->destroy = true;
-                        selectedEnemyObj->destroyed = true;
+
                     }
                 }
                 if(!selectedEnemyObj->destroyed) {
                     ImGui::SameLine();
-                    if (ImGui::Button(("Play As Enemy"), ImVec2(260 - 15, 81))) {
+                    if (ImGui::Button(ozSelectLanguage("Play As Enemy", u8"Играть за врага"), ImVec2(260 - 15, 81))) {
                         if (selectedEnemyObj) {
                             selectedEnemyObj->playAs = true;
                         }
                     }
-                    if (ImGui::Button(("TP Me to Enemy"), ImVec2(260 - 15, 81))) {
+
+                    if (ImGui::Button(ozSelectLanguage("TP Enemy To Me", u8"Телепорт врага ко мне"), ImVec2(260 - 15, 81))) {
                         if (selectedEnemyObj) {
                             selectedEnemyObj->tpMe2Enemy = true;
                         }
                     }
                     ImGui::SameLine();
-                    if (ImGui::Button(("TP Enemy to Me"), ImVec2(260 - 15, 81))) {
+                    if (ImGui::Button(ozSelectLanguage("TP Me To Enemy", u8"Телепорт к врагу"), ImVec2(260 - 15, 81))) {
                         if (selectedEnemyObj) {
                             selectedEnemyObj->tpEnemy2Me = true;
                         }
                     }
                     ImGui::SameLine();
-                    if (ImGui::Button(("Enemy Kill Me"), ImVec2(260 - 15, 81))) {
+                    if (ImGui::Button(ozSelectLanguage("Enemy Kill Me", u8"Враг меня убъет"), ImVec2(260 - 15, 81))) {
                         if (selectedEnemyObj) {
                             selectedEnemyObj->enemyKillPlayer = true;
                         }
                     }
-                    if (ImGui::Button(("Set Width"), ImVec2(260 - 15, 81))) {
-                       //unimplemented
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(("Set Height"), ImVec2(260 - 15, 81))) {
-                        //unimplemented
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(("Set Size"), ImVec2(260 - 15, 81))) {
-                        //unimplemented
-                    }
-                    if (ImGui::Button(("God Mode"), ImVec2(260 - 15, 81))) {
+                    if(ImGui::Checkbox(ozSelectLanguage("Can't Attack", u8"Бессмертие"), &selectedEnemyObj->invis)){
                         if (selectedEnemyGame == 0) {
-                            grCantAttack = true;
-                        }
-                        if (selectedEnemyGame == 1) {
-                            grpCantAttack = true;
-                        }
-                        if (selectedEnemyGame == 2) {
-                            slCantAttack = true;
-                        }
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(("Invisible"), ImVec2(260 - 15, 81))) {
-                        if (selectedEnemyGame == 0) {
-                            grInvis = true;
-                        }
-                        if (selectedEnemyGame == 1) {
-                            grpInvis = true;
-                        }
-                        if (selectedEnemyGame == 2) {
-                            slInvis = true;
-                        }
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(("Attack Distance"), ImVec2(260 - 15, 81))) {
+                            grCantAttack = !grCantAttack;
 
+                        }
+                        if (selectedEnemyGame == 1) {
+                            grpCantAttack = !grpCantAttack;
+
+                        }
+                        if (selectedEnemyGame == 2) {
+                            slCantAttack = !slCantAttack;
+
+                        }
                     }
+                    if(ImGui::Checkbox(ozSelectLanguage("Invisible", u8"Невидимость"), &selectedEnemyObj->invis)){
+                        if (selectedEnemyGame == 0) {
+                            grInvis = !grInvis;
+
+                        }
+                        if (selectedEnemyGame == 1) {
+                            grpInvis = !grpInvis;
+
+                        }
+                        if (selectedEnemyGame == 2) {
+                            slInvis = !slInvis;
+
+                        }
+                    }
+
+                        ImGui::SliderFloat(ozSelectLanguage("Set attack Distance", u8"Радиус атаки"), &selectedEnemyObj->killDist, 0, 15);
                 }
+                break;
+            case 2:
+                ImGui::PushItemWidth(-1.0f);
+                if (ImGui::Button(ozSelectLanguage("Teleport Me to Granny", u8"Я -> Бабка"))) {
+                    EnemyEditor.enemies[0]->tpMe2Enemy = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(ozSelectLanguage("Teleport Granny To Me", u8"Бабка -> Я"))) {
+                    EnemyEditor.enemies[0]->tpEnemy2Me = true;
+                }
+
+                if (ImGui::Button(ozSelectLanguage("Teleport Me to Grandpa", u8"Я -> Дед"))) {
+                    EnemyEditor.enemies[1]->tpMe2Enemy = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(ozSelectLanguage("Teleport Grandpa To Me", u8"Дед -> Я"))) {
+                    EnemyEditor.enemies[1]->tpEnemy2Me = true;
+                }
+                if (ImGui::Button(ozSelectLanguage("Teleport Me to Slendrina", u8"Я -> Дед"))) {
+
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(ozSelectLanguage("Teleport Slendrina To Me", u8"Дед -> Я"))) {
+
+                }
+                ImGui::PopItemWidth();
+                ImGui::Separator();
+                ImGui::InputFloat3(ozSelectLanguage("Player Pos", u8"Координаты игрока"), playerPosTp);
+
+                ImGui::Text("%s",ozSelectLanguage("Player X:", u8"Координата X:"));
+                ImGui::SameLine();
+
+                // Arrow buttons with Repeater
+
+
+                ImGui::PushButtonRepeat(true);
+                if (ImGui::ArrowButton("##left", ImGuiDir_Left)) {
+                    playerPosTp[0]--;
+                    teleportCrdCommit = true;
+                }
+                ImGui::SameLine(0.0f, spacing);
+                if (ImGui::ArrowButton("##right", ImGuiDir_Right)) {
+                    playerPosTp[0]++;
+                    teleportCrdCommit = true;
+                }
+
+                ImGui::PopButtonRepeat();
+                ImGui::SameLine();
+                ImGui::Text("%f", playerPosTp[0]);
+
+
+                ImGui::Text("%s",ozSelectLanguage("Player Y:", u8"Координата X:"));
+                ImGui::SameLine();
+
+                // Arrow buttons with Repeater
+
+
+                ImGui::PushButtonRepeat(true);
+                if (ImGui::ArrowButton("##left1", ImGuiDir_Left)) {
+                    playerPosTp[1]--;
+                    teleportCrdCommit = true;
+                }
+                ImGui::SameLine(0.0f, spacing);
+                if (ImGui::ArrowButton("##right1", ImGuiDir_Right)) {
+                    playerPosTp[1]++;
+                    teleportCrdCommit = true;
+                }
+
+                ImGui::PopButtonRepeat();
+                ImGui::SameLine();
+                ImGui::Text("%f", playerPosTp[1]);
+
+                ImGui::Text("%s",ozSelectLanguage("Player Z:", u8"Координата Z:"));
+                ImGui::SameLine();
+
+                // Arrow buttons with Repeater
+
+
+                ImGui::PushButtonRepeat(true);
+                if (ImGui::ArrowButton("##left2", ImGuiDir_Left)) {
+                    playerPosTp[2]--;
+                    teleportCrdCommit = true;
+                }
+                ImGui::SameLine(0.0f, spacing);
+                if (ImGui::ArrowButton("##right2", ImGuiDir_Right)) {
+                    playerPosTp[2]++;
+                    teleportCrdCommit = true;
+                }
+
+                ImGui::PopButtonRepeat();
+                ImGui::SameLine();
+                ImGui::Text("%f", playerPosTp[2]);
+
+                ImGui::Separator();
+
+                if(ImGui::Combo(ozSelectLanguage("Places to Teleport", u8"Места для телепортации"), &placetoteleport, placelist, IM_ARRAYSIZE(placelist))){
+                    teleportPlaceCommit = true;
+                }
+
+                break;
+            case 3:
+                if(ImGui::Combo(ozSelectLanguage("Items List", u8"Выбрать предмет для создания"), &ItemToSpawn, itemlist, IM_ARRAYSIZE(placelist))){
+                    ItemSpawnCommit = true;
+                }
+            break;
+                case 4:
+                       //ImGui::InputText(ozSelectLanguage("Custom scene", u8"Кастомная сцена"), &(sceneToLoad), 15);
+                       //ImGui::PushItemWidth(-1.0f);
+                      // if (ImGui::Button(ozSelectLanguage("Go to scene", u8"Перейти к сцене"))) {
+                       //     LoadScene(new_il2cpp_string(sceneToLoad));
+                      // }
+                      // ImGui::PopItemWidth();
+                      ImGui::Text("will put more stuff here soon");
+                       ImGui::Separator();
+                ImGui::PushItemWidth(-1.0f);
+                if (ImGui::Button(ozSelectLanguage("Game Intro", u8"Интро"))) {
+                    LoadScene(new_il2cpp_string("SplashScreen"));
+                }
+
+                if (ImGui::Button(ozSelectLanguage("Main Menu", u8"Главное меню"))) {
+                    LoadScene(new_il2cpp_string("Menu"));
+                }
+                if (ImGui::Button(ozSelectLanguage("Game Scene", u8"Сцена игры"))) {
+                    LoadScene(new_il2cpp_string("Scene"));
+                }
+
+
+                ImGui::PopItemWidth();
+
                 break;
         }
     }
-    if(Settings::Tab == 3){
+    if(currentCategory == 3){
         switch(i) {
             case 0:
-                ImGui::Checkbox(("Enable FOG"), &fog);
-                if(ImGui::SliderFloat(("Fog Distance"), &fogd, 0, 15)){
-
+                if(ImGui::Checkbox(ozSelectLanguage("Enable FOG", u8"Включить туман"), &fog)){
+                    SetFOG(fog);
+                }
+                if(ImGui::SliderFloat(ozSelectLanguage("FOG Distance", u8"Радиус тумана"), &fogd, 0, 15)){
+                       SetFOGDist(fogd);
                 }
                 break;
             case 1:
-                 if(ImGui::Button(("Set High Quality"))){
+                 if(ImGui::Button(ozSelectLanguage("Set High Quality", u8"Высокое качество"))){
                      SetQualityLevel(1, true);
                  }
 
-                if(ImGui::Button(("Set Low Quality"))){
+                if(ImGui::Button(ozSelectLanguage("Set Low Quality", u8"Низкое качество"))){
                     SetQualityLevel(0, true);
                 }
                 break;
             case 2:
-                ImGui::Checkbox(("Bypass FPS Limit"), &fpsbypass);
+                if(ImGui::Checkbox(ozSelectLanguage("Unlimited FPS", u8"Обойти ограничение FPS (2000 кадров)"), &fpsbypass)){
+                        SetFrameRateLimit(fpsbypass ? 2000 : 30);
+                   }
                 ImGui::Separator();
-                ImGui::Checkbox(("Slendrina Wireframe"), &chamsSlendrina);
-                ImGui::Checkbox(("Enable Wireframe"), &wireframe);
-                if(ImGui::SliderFloat(("Wireframe size"), &wfLW, 0, 5)){
+                ImGui::Checkbox(ozSelectLanguage("Disable Frame Clear", u8"Отключить авто-удаление отрисовки"), &dontClear);
+                ImGui::Checkbox(ozSelectLanguage("Slendrina Wireframe", u8"Включить вайр-фрейм для слендрины"), &chamsSlendrina);
+                ImGui::Checkbox(ozSelectLanguage("Enable Wireframe", u8"Включить вайр-фрейм"), &wireframe);
+                if(ImGui::SliderFloat(ozSelectLanguage("Wireframe Size", u8"Размер Вайр-фрейма"), &wfLW, 0, 5)){
 
                 }
-
                 ImGui::Separator();
                 //ImGui::ColorEdit4("Wireframe color", nullptr);
-                ImGui::Checkbox(("Enable Color Filter"), &clrfilter);
+
+                ImGui::Checkbox(ozSelectLanguage("Enable Color Filter", u8"Включить фильтрацию цвета"), &clrfilter);
+                ImGui::Checkbox("R", &clrfilterR);
+                ImGui::SameLine();
+                ImGui::Checkbox("G", &clrfilterG);
+                ImGui::SameLine();
+                ImGui::Checkbox("B", &clrfilterB);
                // ImGui::ColorEdit4("Color Filter", nullptr);
                 break;
         }
     }
-    if(Settings::Tab == 4){
+    if(currentCategory == 4){
         switch(i){
             case 0:
-                ImGui::Checkbox(("Make Enemy Ignore Teddy"), &igntdy);
                 ImGui::Separator();
-                ImGui::Checkbox(("All Cannot Attack"), &allCantAttack);
+                ImGui::Checkbox(ozSelectLanguage("No one can attack me", u8"Никто меня не убьет"), &allCantAttack);
                 if(!allCantAttack) {
-                    ImGui::Checkbox(("Granny Can't Attack (Grandpa Also)"), &grCantAttack);
-                    ImGui::Checkbox(("Grandpa Can't Attack"), &grpCantAttack);
-                    ImGui::Checkbox(("Crocodile Can't Attack"), &crCantAttack);
-                    ImGui::Checkbox(("Slendrina Can't Attack"), &slCantAttack);
+                    ImGui::Checkbox(ozSelectLanguage("Granny Can't attack", u8"Бессмертие от бабки"), &grCantAttack);
+                    ImGui::Checkbox(ozSelectLanguage("Grandpa Can't attack", u8"Бессмертие от деда"), &grpCantAttack);
+                    ImGui::Checkbox(ozSelectLanguage("Crocodile Can't attack", u8"Бессмертие от крокодила"), &crCantAttack);
+                    ImGui::Checkbox(ozSelectLanguage("Slendrina Can't attack", u8"Бессмертие от слендрины"), &slCantAttack);
                 }
                 ImGui::Separator();
-                ImGui::Checkbox(("No One Can See Me"), &allInvis);
+                ImGui::Checkbox(ozSelectLanguage("No one can see me", u8"Все слепые"), &allInvis);
                 if(!allInvis){
-                    ImGui::Checkbox(("Invisible From Granny"), &grInvis);
-                    ImGui::Checkbox(("Invisible From Grandpa"), &grpInvis);
-                    ImGui::Checkbox(("Invisible From Crocodile"), &crInvis);
-                    ImGui::Checkbox(("Invisible From Robot"), &slInvis);
+                    ImGui::Checkbox(ozSelectLanguage("Invisible from Granny", u8"Невидимость для бабки"), &grInvis);
+                    ImGui::Checkbox(ozSelectLanguage("Invisible from Grandpa", u8"Невидимость для деда"), &grpInvis);
+                    ImGui::Checkbox(ozSelectLanguage("Invisible from Crocodile", u8"Невидимость для крокодила"), &crInvis);
+                    ImGui::Checkbox(ozSelectLanguage("Invisible from Robot", u8"Невидимость для робота в метро"), &slInvis);
                 }
 
                 break;
             case 1:
 
                  if(ImGui::Checkbox(("Disable Collisions"), &igncol)){
+                     savePlayerY = true;
                      IgnoreLayerCollision(0,8, igncol);
                  }
                  ImGui::Checkbox(("Fly"), &fly);
@@ -644,8 +742,6 @@ void DrawContentFor(int i){
                         set_orthographicSize(Camera_main(), ortoSize);
                     }
                 }
-
-
                 ImGui::Separator();
                 if(ImGui::SliderFloat(("Near Clip Plane "), &nearCF, 0.3f, 100)){
                     if(Camera_main && Camera_main() && set_nearClipPlane){
@@ -662,11 +758,7 @@ void DrawContentFor(int i){
                         set_orthographic(Camera_main(), ortoCam);
                     }
                 }
-
-
-
                 ImGui::Separator();
-               // ImGui::Checkbox("Freeze Camera Position", &freezeCamSummary);
                 break;
             case 3:
 
@@ -713,7 +805,7 @@ ImDrawList* getDrawList(){
     if(ESP.drawBehindMenu){
         drawList = ImGui::GetBackgroundDrawList();
     } else {
-        drawList = ImGui::GetForegroundDrawList(ImGui::GetMainViewport());
+        drawList = ImGui::GetForegroundDrawList();
     }
     return drawList;
 }
@@ -726,43 +818,89 @@ void RenderESPSummary(){
                 if(i==3 && me->physicalPosition.x == 0 ){
                     getDrawList()->AddText(ImGui::GetFont(), 30, ImVec2(0,0), ImColor(255, 255, 0, 255), "Can't find Slendrina!", nullptr, 0.0f, nullptr);
                 } else {
-                    DrawESPElement(getDrawList(), ImVec2(screenWidth / 2, ESP.lineOffsetY), me->name, me->color,
+                    DrawESPElement(getDrawList(), ImVec2(ImGui::GetIO().DisplaySize.x / 2, ESP.lineOffsetY), me->name, me->color,
                                    me->screenPosition, ESP.boxBg,1, me->distance);
                 }
             }
         }
     }
 }
+float menuSizeXMax = 1200, menuSizeY = 483;
+ImVec4 strokeColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 //Render the menu
 void Render(){
+    RenderTicks++;
+    LOGD("Rendering ImGui. Render Ticks: %d Display Size: %f, %f", RenderTicks, screenWidth,screenHeight)
     ImGuiIO& io = ImGui::GetIO();
+    if(ImGui::GetIO().DisplaySize.x < 2340 || ImGui::GetIO().DisplaySize.x < 1080){
+        ImGui::GetStyle().ScaleAllSizes(ImGui::GetIO().DisplaySize.x * MULT_X * SCREEN_FRUSTUMM);
+    } else {
+        ImGui::GetStyle().ScaleAllSizes(3);
+    }
+    ImGui::GetStyle().WindowRounding = 10;
+    ImGui::GetStyle().WindowBorderSize = 3;
+    ImGui::GetStyle().FrameRounding = 14.0f;
     if(!ImGui::get_cmdExecutorHaveVal()){
         ImGui::set_cmdExecutor(&cmdExecuteSystem);
     }
     //Creating A new ImGui Frame for our backend
-    ImGui_ImplAndroidGLES2_NewFrame(screenWidth, screenHeight, currentTimeInMilliseconds()-startTime);
+    ImGui_ImplAndroidGLES2_NewFrame(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y, currentTimeInMilliseconds());
     ImDrawList* drawList = getDrawList();
     //Example using text over screen
     drawList->AddText(ImGui::GetFont(), 30, ImVec2(100.f, 100.f), ImColor(255, 255, 0, 255), "Player Stats.", nullptr, 0.0f, nullptr);
     //Rendering ESP
     RenderESPSummary();
+    //matrix selector
+    if(ImGui::GetIO().DisplaySize.x <= 1360){
+        menuSizeXMax = 1200-420;
+        LOGD("420 %f",screenWidth)
+    } else {
+        if(ImGui::GetIO().DisplaySize.x <= 1440){
+            LOGD("275 %f",screenWidth)
+            menuSizeXMax = 1200-275;
+        }
+    }
+    if(ImGui::GetIO().DisplaySize.x >= 2600){
+        menuSizeXMax = 1200+300;
+        menuSizeY = 483+150;
+    }
 
     //Open animation
-    if(ImGui::get_openAnimationState() < 1200){
+    if(ImGui::get_openAnimationState() < menuSizeXMax){
 
         ImGui::set_openAnimationState(ImGui::get_openAnimationState()+60);
     }
-    if(ImGui::get_openAnimationState() > 1200){
-        ImGui::set_openAnimationState(1200);
+    if(ImGui::get_openAnimationState() > menuSizeXMax){
+        ImGui::set_openAnimationState(menuSizeXMax);
     }
+    //rgb change border color
+    ImGuiStyle* style = &ImGui::GetStyle();
+    if(strokeColor.x < 1.0f){
+        strokeColor.x+=0.01f;
+    } else{
+        if(strokeColor.y < 1.0f){
+            strokeColor.y+=0.01f;
+        } else {
+            if(strokeColor.z < 1.0f){
+                strokeColor.z+=0.01f;
+            } else {
+                strokeColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+            }
+        }
+    }
+    style->Colors[ImGuiCol_Border] = strokeColor;
     //Set Animation to window
-    ImGui::SetNextWindowBgAlpha(ImGui::get_openAnimationState());
-    ImGui:: SetNextWindowSize(ImVec2(ImGui::get_openAnimationState(),488));
-    std::string wName = std::string( ozObfuscate("Mod Menu for ")) + GAME_NAME + "(" + GAME_VER + ")" + std::string(ozObfuscate(" - by ozMod"));
-    ImGui::Begin( wName.c_str(), nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_AlwaysAutoResize);
+    std::string wName = std::string( ozObfuscate("Mod Menu for ")) + (const char*)GAME_NAME + "(" + (const char*)GAME_VER + ")" + std::string(ozObfuscate(" - by ozMod"));
+
+    if(currentLang == 1){
+        wName = std::string( ozObfuscate("Мод-меню для игры ")) + (const char*)GAME_NAME + " (" + (const char*)GAME_VER + ")" + std::string(ozObfuscate(" - создал ozMod"));
+    }
+    ImGui::Begin( wName.c_str(), nullptr, ImGuiWindowFlags_MenuBar);
+    ImGui::FindWindowByName(wName.c_str())->SizeFull.x = ImGui::get_openAnimationState();
+    ImGui::FindWindowByName(wName.c_str())->SizeFull.y=menuSizeY;
     if (ImGui::BeginMenuBar())
     {
-        if (ImGui::BeginMenu(ozObfuscate("Tools")))
+        if (ImGui::BeginMenu(ozSelectLanguage("Tools", u8"Инструменты")))
         {
             ImGui::MenuItem(ozObfuscate("Paint"), ozObfuscate("Ctrl+P"), &show_paint);
             ImGui::MenuItem(ozObfuscate("Metrics/Debugger"), nullptr);
@@ -774,21 +912,22 @@ void Render(){
             }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu(ozObfuscate("Style Editor")))
+        if (ImGui::BeginMenu(ozSelectLanguage("Style Editor", u8"Персонализация")))
         {
-            if (ImGui::MenuItem(ozObfuscate("Open Editor"), ozObfuscate("Ctrl+O"))) {
+            if (ImGui::MenuItem(ozSelectLanguage("Open Editor", u8"Открыть редактор"), ozObfuscate("Ctrl+O"))) {
                 showStyleEditor = true;
             }
-            if (ImGui::MenuItem(ozObfuscate("Close Editor"), ozObfuscate("Ctrl+O"))) {
+            if (ImGui::MenuItem(ozSelectLanguage("Close Editor", u8"Закрыть редактор"), ozObfuscate("Ctrl+O"))) {
                 showStyleEditor = false;
+
             }
-            if (ImGui::MenuItem(ozObfuscate("Reset All"), ozObfuscate("Ctrl+R")))  {
+            if (ImGui::MenuItem(ozSelectLanguage("Reset All", u8"Сброс"), ozObfuscate("Ctrl+R")))  {
                  ImGui::StyleColorsClassic();
                  ozTheme();
             }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu(ozObfuscate("Features")))
+        if (ImGui::BeginMenu(ozSelectLanguage("Features", u8"Функции")))
         {
             if (ImGui::MenuItem("Test", "")) {
 
@@ -796,13 +935,24 @@ void Render(){
 
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu(ozObfuscate("Help")))
+        if (ImGui::BeginMenu(ozSelectLanguage("Help", u8"Помощь")))
         {
-            if (ImGui::MenuItem(ozObfuscate("About Mod Menu"), ("Ctrl+M"))) {
+            if (ImGui::MenuItem(ozSelectLanguage("Help", u8"Помощь"), ("Ctrl+M"))) {
 
             }
             if (ImGui::MenuItem(ozObfuscate("About ImGui"), ("Ctrl+G"))) {
 
+            }
+
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu(ozSelectLanguage("Language", u8"Язык")))
+        {
+            if (ImGui::MenuItem(ozSelectLanguage("Russian", u8"Русский"), ("Ctrl+M"))) {
+                  currentLang = 1;
+            }
+            if (ImGui::MenuItem(ozSelectLanguage("English", u8"Английский"), ("Ctrl+G"))) {
+                currentLang = 0;
             }
 
             ImGui::EndMenu();
@@ -822,232 +972,243 @@ void Render(){
     if(showStyleEditor){
         ImGui::ShowStyleEditor();
     }
-    ImGui::Columns(2);
-    ImGui::SetColumnOffset(1, 260);
-    {
-        //Left side
-
-        static ImVec4 active = to_vec4(41, 40, 100, 255);
-        static ImVec4 inactive = to_vec4(31, 30, 31, 255);
-
-        ImGui::PushStyleColor(ImGuiCol_Button, Settings::Tab == 1 ? active : inactive);
-        if (ImGui::Button(ozObfuscate("General"), ImVec2(230 - 15, 81))){
-            Settings::Tab = 1;
-        }
-
-
-
-        ImGui::PushStyleColor(ImGuiCol_Button, Settings::Tab == 2 ? active : inactive);
-        if (ImGui::Button(ozObfuscate("ESP"), ImVec2(230 - 15, 81))){
-            Settings::Tab = 2;
-        }
-
-
-
-        ImGui::PushStyleColor(ImGuiCol_Button, Settings::Tab == 3 ? active : inactive);
-        if (ImGui::Button( ozObfuscate("Unity"), ImVec2(230 - 15, 81)))
-            Settings::Tab = 3;
-
-
-        ImGui::PushStyleColor(ImGuiCol_Button, Settings::Tab == 4 ? active : inactive);
-        if (ImGui::Button(ozObfuscate("Player"), ImVec2(230 - 15, 81)))
-            Settings::Tab = 4;
-
-        ImGui::PopStyleColor(4);
-
-        ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 30);
-    }
-
-    ImGui::NextColumn();
-
-    //Right side
-    {
-
-
-        static ImGuiTextFilter filter;
-        static std::vector<std::string> resources;
-        if(Settings::Tab==0) {
-
-            resources =
-                    {
-                            std::string(ozObfuscate("Getting Started")),
-                                        std::string( ozObfuscate("About Mod Menu")),
-                            std::string(ozObfuscate("ImGui Demo Window")),
-                            std::string(ozObfuscate("Game Analytics/Metrics")),
-
-                    };
-
-        }
-        if(Settings::Tab==1){
-            resources =
-                    {
-                            std::string(ozObfuscate("Enimies Admin Panel")),
-                                        std::string( ozObfuscate("Camera Menu")),
-                            std::string(ozObfuscate("Object Editor")),
-                                        std::string(ozObfuscate("Teleport Menu")),
-                                                    std::string(ozObfuscate("Items Spawner")),
-                                                                std::string(ozObfuscate("Clones Spawner"))
-                    };
-        }
-        if(Settings::Tab==2){
-            resources =
-                    {
-                            std::string(ozObfuscate("ESP Layer")),
-                                        std::string(ozObfuscate("ESP Style")),
-                                                                std::string(ozObfuscate("ESP Enemies"))
-                    };
-        }
-        if(Settings::Tab==3){
-            resources =
-                    {
-                            std::string(ozObfuscate("Light")),
-                                                    std::string(ozObfuscate("Quality Settings")),
-                                                                            std::string(ozObfuscate("Engine Core"))
-                    };
-        }
-
-        if(Settings::Tab==4){
-            resources =
-                    {
-                            std::string(ozObfuscate("Anti Enemy")),
-                                                    std::string(ozObfuscate("Physics")),
-                                                                            std::string(ozObfuscate("Camera")),
-                                                                                                    std::string(ozObfuscate("Player Stats")),
-                                                                                                                            std::string(ozObfuscate("No-Clip Settings")),
-                    };
-        }
-        filter.Draw(u8" Поиск", 240);
-        ImGui::SameLine();
-        if(ImGui::Button("Clear")){
-            filter.Clear();
-        }
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(0, 0, 0, 0));
-
-        if (ImGui::ListBoxHeader("##ResourcesList", ImVec2(ImGui::GetContentRegionAvail().x + 20, ImGui::GetContentRegionAvail().y)))
+    if(!showStyleEditor) {
+        ImGui::Columns(2);
+        ImGui::SetColumnOffset(1, 260);
         {
-            if(Settings::Tab == 3){
-                if(ImGui::SliderFloat("Time Scale", &timescale, 0, 5) && set_timeScale){
-                    set_timeScale(timescale);
+            //Left side
 
-                }
+            static ImVec4 active = to_vec4(41, 40, 100, 255);
+            static ImVec4 inactive = to_vec4(31, 30, 31, 255);
+
+            ImGui::PushStyleColor(ImGuiCol_Button, currentCategory == 1 ? active : inactive);
+            if (ImGui::Button(ozSelectLanguage("General", u8"Главное"), ImVec2(230 - 15, 81))) {
+                currentCategory = 1;
             }
-            if(Settings::Tab == 2){
-                ImGui::Checkbox("Enable ESP", &ESP.ESP);
+
+
+            ImGui::PushStyleColor(ImGuiCol_Button, currentCategory == 2 ? active : inactive);
+            if (ImGui::Button(ozSelectLanguage("ESP", u8"ESP / ЕСП"), ImVec2(230 - 15, 81))) {
+                currentCategory = 2;
             }
-            int i = 0;
-            for (const auto& resource : resources)
-            {
-                if (filter.PassFilter(resource.c_str()))
-                {
-                    if (ImGui::TreeNode(resource.c_str())){
-                        DrawContentFor(i);
-                        ImGui::TreePop();
+
+
+            ImGui::PushStyleColor(ImGuiCol_Button, currentCategory == 3 ? active : inactive);
+            if (ImGui::Button(ozSelectLanguage("Unity", u8"Движок игры (Unity)"), ImVec2(230 - 15, 81)))
+                currentCategory = 3;
+
+
+            ImGui::PushStyleColor(ImGuiCol_Button, currentCategory == 4 ? active : inactive);
+            if (ImGui::Button(ozSelectLanguage("Player", u8"Игрок"), ImVec2(230 - 15, 81)))
+                currentCategory = 4;
+
+            ImGui::PopStyleColor(4);
+
+            ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 30);
+        }
+
+        ImGui::NextColumn();
+
+        //Right side
+        {
+
+
+            static ImGuiTextFilter filter;
+            static std::vector<std::string> resources;
+            if (currentCategory == 0) {
+
+                resources =
+                        {
+                                std::string(ozSelectLanguage("Getting Started", u8"С чего начать")),
+                                std::string(ozSelectLanguage("About Mod Menu", u8"Про модификацию")),
+                                std::string(ozSelectLanguage("ImGui Demo Window", u8"Демонстрационное окно ImGui")),
+                                std::string(ozSelectLanguage("Metrics and debugger", u8"Откладка и статистика")),
+
+                        };
+
+            }
+            if (currentCategory == 1) {
+                resources =
+                        {
+                                std::string(ozSelectLanguage("Enemy Control Panel", u8"Управление врагами")),
+                                //std::string(ozSelectLanguage("Enemy Control Panel", u8"Управление врагами")), // camera menu
+                                std::string(ozSelectLanguage("Object Editor", u8"Редактор объектов")),
+                                std::string(ozSelectLanguage("Teleport Menu", u8"Меню телепортации")),
+                                std::string(ozSelectLanguage("Item Spawner", u8"Спавнер предметов")),
+                                std::string(ozSelectLanguage("Scene Manager", u8"Управление сценами"))
+                        };
+            }
+            if (currentCategory == 2) {
+                resources =
+                        {
+                                std::string(ozSelectLanguage("ESP Layer", u8"Слой ESP")),
+                                std::string(ozSelectLanguage("ESP Style", u8"Внешний вид ESP")),
+                                std::string(ozSelectLanguage("ESP Enemies", u8"Менеджер врагов ESP"))
+                        };
+            }
+            if (currentCategory == 3) {
+                resources =
+                        {
+                                std::string(ozSelectLanguage("Light", u8"Настройки света")),
+                                std::string(ozSelectLanguage("Quality Settings", u8"Качество")),
+                                std::string(ozSelectLanguage("Engine Core", u8"Движок игры"))
+                        };
+            }
+
+            if (currentCategory == 4) {
+                resources =
+                        {
+                                std::string(ozSelectLanguage("Anti-Enemy", u8"Бессмертие / Невидимость")),
+                                std::string(ozSelectLanguage("Physics", u8"Физика")),
+                                std::string(ozSelectLanguage("Camera", u8"Камера")),
+                                std::string(ozSelectLanguage("Player Stats", u8"Статистика игрока на экране")),
+                                std::string(ozSelectLanguage("No-Clip Settings", u8"Настройки полета (если он включен)")),
+                        };
+            }
+            filter.Draw(ozSelectLanguage("Search", u8"Поиск"), 240);
+            ImGui::SameLine();
+            if (ImGui::Button(ozSelectLanguage("Clear", u8"Очистить"))) {
+                filter.Clear();
+            }
+            if (ImGui::ListBoxHeader("##ResourcesList",
+                                     ImVec2(ImGui::GetContentRegionAvail().x + 20,
+                                            ImGui::GetContentRegionAvail().y))) {
+                if (currentCategory == 3) {
+                    if (ImGui::SliderFloat(ozSelectLanguage("Time Scale", u8"Управление временем"), &timescale, 0, 5) && set_timeScale) {
+                        set_timeScale(timescale);
+
                     }
                 }
-                i++;
+
+                if (currentCategory == 2) {
+                    ImGui::Checkbox(ozSelectLanguage("Enable ESP", u8"Включить ESP"), &ESP.ESP);
+                }
+                int i = 0;
+                for (const auto &resource : resources) {
+                    if (filter.PassFilter(resource.c_str())) {
+                        if (ImGui::TreeNode(resource.c_str())) {
+                            DrawContentFor(i);
+                            ImGui::TreePop();
+                        }
+                    }
+                    i++;
+                }
+                ImGui::ListBoxFooter();
             }
-            ImGui::ListBoxFooter();
+
         }
-        ImGui::PopStyleColor();
     }
-//ShowDemoWindow
-    //ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.65f);    // 2/3 of the space for widget and 1/3 for labels
-    // Right align, keep 140 pixels for labels
+
     ImGui::End();
-    ImGui::EndFrame(); //End ImGui Frame
     ImGui::Render(); // Render ImGui
-    ImGui_ImplAndroidGLES2_RenderDrawLists(ImGui::GetDrawData()); //Draw ImGui Draw Data with our Android Backend
+    ImGui_ImplAndroidGLES2_RenderDrawLists(ImGui::GetDrawData());
+    ImGui::EndFrame(); //End ImGui Frame
+    ImGui::GetStyle().ResetAllSizes();
 }
 
-jclass (*oFindClassHook)(JNIEnv*, const char*);
-jclass FindClassHook(JNIEnv*env, const char*classn)
-{
-    jclass result = oFindClassHook(env, classn);
-    if(std::string(classn).find(ozObfuscate("uk/lgl")) != std::string::npos){
-        return nullptr;
-    }
-    if(std::string(classn).find(ozObfuscate("com/android/support/Preferences")) != std::string::npos){
-        return nullptr;
-    }
-    if(std::string(classn).find(ozObfuscate("com/android/support/Menu")) != std::string::npos){
-        return nullptr;
-    }
-    if(std::string(classn).find(ozObfuscate("FloatingModMenuService")) != std::string::npos){
-        return nullptr;
-    }
-    if(std::string(classn).find(ozObfuscate("keysystem")) != std::string::npos){
-        return nullptr;
-    }
-    if(std::string(classn).find(ozObfuscate("tdm/ahz")) != std::string::npos){
-        return nullptr;
-    }
-    return result;
-}
-jint (*old_RegisterNatives )(JNIEnv*, jclass, JNINativeMethod*,jint);
+
+
 bool (*old_nativeInjectEvent )(JNIEnv*, jobject ,jobject event);
 bool hook_nativeInjectEvent(JNIEnv* env, jobject instance,jobject event){
         jclass tchcls = env->FindClass(ozObfuscate("android/view/MotionEvent"));
+        if(!tchcls){
+            LOGI("Can't find MotionEvent!") //на логах можно ; не ставить :)
+        }
+
         jclass kycls = env->FindClass(ozObfuscate("android/view/KeyEvent"));
+         if(!kycls){
+            LOGI("Can't find KeyEvent!")
+         }
         jmethodID ga = env->GetMethodID(kycls, ozObfuscate("getAction"),
                                     ozObfuscate("()I"));
+        if(!ga){
+            LOGI("Can't find KeyEvent.getAction!")
+         }
         if(env->IsInstanceOf(event, kycls) && env->CallIntMethod(event, ga) == 0) {
-            LOGI("Inject KeyEvent");
+            LOGI("Key Event Found!")
             jmethodID gkc = env->GetMethodID(kycls, ozObfuscate("getKeyCode"), ozObfuscate("()I"));
-            jmethodID guc = env->GetMethodID(kycls, ozObfuscate("getUnicodeChar"), ozObfuscate("()I"));
+            if(!gkc){
+                LOGI("Can't find KeyEvent.getKeyCode!")
+            }
+            jmethodID guc = env->GetMethodID(kycls, ozObfuscate("getUnicodeChar"), ozObfuscate("(I)I"));
+            if(!guc){
+                LOGI("Can't find KeyEvent.getUnicodeChar!")
+            }
+            jmethodID gms = env->GetMethodID(kycls, ozObfuscate("getMetaState"), ozObfuscate("()I")); //I need it for ctrl, alt, etc.
+            if(!gms){
+                LOGI("Can't find KeyEvent.getMetaState!")
+            }
             int keyCode = env->CallIntMethod(event, gkc);
             ImGuiIO& io = ImGui::GetIO();
             switch (keyCode) {
                 case 19:
-                     inputChar = keyCode;
+                    LOGI("Key Code: 19")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 20:
-                    inputChar = keyCode;
+                       LOGI("Key Code: 20")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 21:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 21")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 22:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 22")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 61:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 61")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 66:
-                    inputChar = keyCode;
+                    LOGI("Key Code: Enter")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 67:
-                    inputChar = keyCode;
+                    LOGI("Key Code: Del")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 92:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 92")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 93:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 93")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 111:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 111")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 112:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 112")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 122:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 122")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 123:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 123")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 case 124:
-                    inputChar = keyCode;
+                    LOGI("Key Code: 124")
+                    ImGui::GetIO().AddInputCharacter(keyCode);
                     break;
                 default:
-                     ImGui::GetIO().AddInputCharacter(env->CallIntMethod(event, guc));
+                    LOGI("Key Code: Other")
+                     ImGui::GetIO().AddInputCharacter(env->CallIntMethod(event, guc, env->CallIntMethod(event, gms)));
                     break;
             }
             return old_nativeInjectEvent(env, instance, event);
         }
+         LOGD("Processing Touch Event! (not sure)")
         if(!env->IsInstanceOf(event, tchcls)){
             return old_nativeInjectEvent(env, instance, event);
         }
+        LOGD("Processing Touch Event!")
         jmethodID id_getAct = env->GetMethodID(tchcls, ozObfuscate("getActionMasked"), ozObfuscate("()I"));
         jmethodID id_getX = env->GetMethodID(tchcls, ozObfuscate("getX"), ozObfuscate("()F"));
         jmethodID id_getY = env->GetMethodID(tchcls, ozObfuscate("getY"), ozObfuscate("()F"));
@@ -1058,62 +1219,130 @@ bool hook_nativeInjectEvent(JNIEnv* env, jobject instance,jobject event){
         }
         return false;
 }
-void SearchActivtiy(JNIEnv * globalEnv){
+
+
+void SearchActivity (JNIEnv * globalEnv){
     jclass prcls = globalEnv->FindClass("com/unity3d/player/UnityPlayer");
     if(prcls != nullptr){
+        LOGW("Soft Input: UnityPlayer.java is found")
         jfieldID UnityPlayer_CurrentActivity_fid2 = globalEnv->GetStaticFieldID(prcls, "currentActivity","Landroid/app/Activity;");
         if(UnityPlayer_CurrentActivity_fid2 != nullptr){
-            UnityPlayer_CurrentActivity_fid = globalEnv->NewGlobalRef(globalEnv->GetStaticObjectField(prcls, UnityPlayer_CurrentActivity_fid2));
-            if(UnityPlayer_CurrentActivity_fid == nullptr){
-                //not ok
-            } else {
-                //okk
+            LOGW("Soft Input: UnityPlayer.currentActivity is found")
+            jobject resultObject=globalEnv->GetStaticObjectField(prcls, UnityPlayer_CurrentActivity_fid2);
+            if(resultObject!=nullptr){
+                LOGW("Soft Input: Get Current Activity Success!")
+                UnityPlayer_CurrentActivity_fid = globalEnv->NewGlobalRef(resultObject);
             }
         }
     }
 }
-
-bool (*old_nativeDraw )(JNIEnv*, jobject );
-bool hook_nativeDraw(JNIEnv* env, jobject instance){
-    UpdateInput();
-    // Open on-screen (soft) input if requested by Dear ImGui
-    static bool WantTextInputLast = false;
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.WantTextInput && !WantTextInputLast){
-        diplayKeyboard(nullptr);
-    }
-    WantTextInputLast = io.WantTextInput;
-    Render();
-    bool result = old_nativeDraw(env, instance);
-    LOGI("JNI Render Thread");
-    return result;
-}
+jint (*old_RegisterNatives )(JNIEnv*, jclass, JNINativeMethod*,jint);
 jint hook_RegisterNatives(JNIEnv* env, jclass destinationClass, JNINativeMethod* methods,
-                          jint count){
-    int i; // [sp+24h] [bp-2Ch]
-    for ( i = 0; i < count; ++i )
-    {
-        if (!strcmp(methods[i].name, ozObfuscate("nativeInjectEvent")) ){
-            MSHookFunction(methods[i].fnPtr, (void*)hook_nativeInjectEvent, (void **)&old_nativeInjectEvent);
-        }
-        if (!strcmp(methods[i].name, ozObfuscate("nativeRender")) ){
-            LOGI("Native Render! It is on: %p", (methods[i].fnPtr));
+                          jint totalMethodCount){
 
-            MSHookFunction(methods[i].fnPtr, (void*)hook_nativeDraw, (void **)&old_nativeDraw);
+    int currentNativeMethodNumeration;
+    for (currentNativeMethodNumeration = 0; currentNativeMethodNumeration < totalMethodCount; ++currentNativeMethodNumeration )
+    {
+        if (!strcmp(methods[currentNativeMethodNumeration].name, ozObfuscate("nativeInjectEvent")) ){
+            DobbyHook(methods[currentNativeMethodNumeration].fnPtr, (void*)hook_nativeInjectEvent, (void **)&old_nativeInjectEvent);
         }
     }
-    SearchActivtiy(env);
-    return old_RegisterNatives(env, destinationClass, methods, count);
+    SearchActivity(env);
+    return old_RegisterNatives(env, destinationClass, methods, totalMethodCount);
 }
 
+int32_t (*old_ANativeWindow_getWidth)(ANativeWindow* window);
+int32_t new_ANativeWindow_getWidth(ANativeWindow* window){
+    int32_t returnValue = old_ANativeWindow_getWidth(window);
+    LOGI("Recieved Display Width: %d", returnValue)
+    screenWidth = returnValue;
+    ImGui::GetIO().DisplaySize.x = screenWidth;
+    return returnValue;
+}
 
+int32_t (*old_ANativeWindow_getHeight)(ANativeWindow* window);
+int32_t new_ANativeWindow_getHeight(ANativeWindow* window) {
+    int32_t returnValue = old_ANativeWindow_getHeight(window);
+    LOGI("Recieved Display Height: %d", returnValue)
+    screenHeight = returnValue;
+    ImGui::GetIO().DisplaySize.y = screenHeight;
+    return returnValue;
+}
+
+void StartBackend(JNIEnv* env){
+    //Setup Start time
+    startTime = currentTimeInMilliseconds();
+    //Default Display Size
+    screenWidth = 2340;
+    screenHeight = 1080;
+
+    //Setup
+    setupGraphics(screenWidth, screenHeight);
+
+    //код рендера в другом файле. если поместить его здесь то будет краш
+
+    //Display size
+    DobbyHook((void*)ANativeWindow_getWidth, (void*)new_ANativeWindow_getWidth, (void **)&old_ANativeWindow_getWidth);
+    DobbyHook((void*)ANativeWindow_getHeight, (void*)new_ANativeWindow_getHeight, (void **)&old_ANativeWindow_getHeight);
+
+    //Input
+    DobbyHook((void*)env->functions->RegisterNatives, (void*)hook_RegisterNatives, (void **)&old_RegisterNatives);
+
+}
+
+/*
+jclass (*oFindClassHook)(JNIEnv* env, const char* name);
+jclass FindClassHook(JNIEnv *env, const char*name)
+{
+    bool infected = false;
+
+    if(std::string(name).find(ozObfuscate("uk/lgl")) != std::string::npos){
+        infected = true;
+    }
+    if(std::string(name).find(ozObfuscate("com/android/support/Preferences")) != std::string::npos){
+        infected = true;
+    }
+    if(std::string(name).find(ozObfuscate("com/android/support/Menu")) != std::string::npos){
+        infected = true;
+    }
+    if(std::string(name).find(ozObfuscate("FloatingModMenuService")) != std::string::npos){
+        infected = true;
+    }
+    if(std::string(name).find(ozObfuscate("keysystem")) != std::string::npos){
+        infected = true;
+    }
+    if(std::string(name).find(ozObfuscate("tdm/ahz")) != std::string::npos){
+        infected = true;
+    }
+
+if(infected){
+infected = false;
+LOGF("Unused branch found!!")
+exit(0);
+return nullptr;
+}
+return oFindClassHook(env, name);
+}
+ */
+void ProtectJavaClasses(JNIEnv*env){
+    LOGI("Protecting Classes..")
+}
 extern "C"
 JNIEXPORT jint JNICALL
 JNI_OnLoad(JavaVM *vm, void *reserved) {
+    LOGI("JNI_OnLoad")
+    //setup jni
     publicJVM = vm;
     JNIEnv *globalEnv;
     publicJVM->GetEnv((void **) &globalEnv, JNI_VERSION_1_6);
+
+    //setup our imgui backend
+    StartBackend(globalEnv);
+
+    //some protection soon maybe xd
+    ProtectJavaClasses(globalEnv);
+
+    //init mods hooks
     InitMods();
-    MSHookFunction((void*)globalEnv->functions->RegisterNatives, (void*)hook_RegisterNatives, (void **)&old_RegisterNatives);
     return JNI_VERSION_1_6;
 }

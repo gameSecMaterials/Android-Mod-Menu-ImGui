@@ -2,6 +2,8 @@
 // Created by ozMod on 27.11.2021.
 //
 
+#include "Dobby-master/include/dobby.h"
+
 #define targetLibName ozObfuscate("libil2cpp.so")
 
 void *get_il2cpp() {
@@ -12,11 +14,9 @@ void *get_il2cpp() {
 
     return mod;
 }
-#include <unistd.h>
-    #include <pthread.h>
-#include <android/native_window.h>
-//#include "libil2cpp.so.h"
-#include "ozModSharedLibraryManager.h"
+
+
+
 int hookCount = 0;
 struct ESPEnemy {
     bool ESP = true;
@@ -41,6 +41,9 @@ struct Enemy {
     bool setActive;
     bool tpMe2Enemy,tpEnemy2Me;
     bool enemyKillPlayer;
+    bool userDoSetKillDistance, userDoSetWidth, userDoSetHeight, userDoSetSize;
+    float killDist;
+    bool invis, godmod;
 };
 struct EnemyEditor {
     std::vector<Enemy *> enemies;
@@ -99,7 +102,33 @@ struct ESP{
     }
 
 }ESP;
-bool fog, fpsbypass, wireframe, clrfilter;
+struct GrannyItemPointers{
+    void * accelerator;
+    void * bridgecrank;
+    void* coconut;
+    void* coin;
+    void* crowbar;
+    void* doorActivator;
+    void*electricSwitch;
+    void*firewood;
+    void*gatefuse;
+    void*gate;
+    void*gencable;
+    void*matches;
+    void*padlockkey;
+    void*planka;
+    void*safekey;
+    void*shedkey;
+    void*shotgun;
+    void*slingshot;
+    void*teddy;
+    void*trainKey;
+    void*vas;
+    void*vas2;
+    void*weaponkey;
+
+}Items;
+bool fog, fpsbypass, wireframe, clrfilter, clrfilterR, clrfilterG, clrfilterB;
 ImColor clf, wfClr;
 float wfLW = 1;
 bool changeForwSpeed, changeBackSpeed;
@@ -108,16 +137,29 @@ float gravity, frSpeed, bckSpeed, fov = 60, ortoSize = 3, nearCF = 1, camAspect 
 bool allCantAttack, grCantAttack, grpCantAttack, crCantAttack, slCantAttack;
 bool allInvis, grInvis, grpInvis, crInvis, slInvis;
 bool igntdy;
-bool ortoCam, freezeCamSummary, freezeCamPosCaptured;
-void * slendrina;
-
-
+bool ortoCam;
+bool savePlayerY;
+float playerPos[3] = {0.0f, 0.0f, 0.0f},playerPosTp[3] = {0.0f, 0.0f, 0.0f};
+int renderFunction=3;
+bool dontClear = false;
+char sceneToLoad = {0};
+int placetoteleport = -1;
+bool teleportCrdCommit = false;
+bool teleportPlaceCommit = false;
+bool ItemSpawnCommit = false;
+int ItemToSpawn = -1;
+float playerY = 0;
 struct Vec2 //Эта структура отлично справляется с получением координат джойстика.  Тот Vector2 херня - он не работает!)
 {
     float x, y;
 };
 struct Vector3{
     float x,y,z;
+
+    Vector3(float x, float y, float z) : x(x), y(y), z(z) {
+
+    }
+
     Vector3 operator/(float f) {
         Vector3 v = {
                 x/f,
@@ -151,6 +193,57 @@ struct Vector3{
         return v;
     }
 };
+
+struct Quaternion {
+            float x;
+            float y;
+            float z;
+            float w;
+}
+struct monoString {
+    void *klass;
+    void *monitor;
+    int length;
+    char chars[255];
+
+    std::string get_string() {
+        std::u16string u16_string(reinterpret_cast<const char16_t *>(chars));
+        std::wstring wide_string(u16_string.begin(), u16_string.end());
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> convert;
+        return convert.to_bytes(wide_string);
+    }
+
+    void set(std::string str) {
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> convert;
+        std::wstring wa = convert.from_bytes(str);
+        length = str.length();
+        std::u16string basicString = std::u16string(wa.begin(), wa.end());
+        const char16_t *cStr = basicString.c_str();
+        memcpy(getChars(), cStr, getLength() * 2);
+    }
+
+    const char *get_const_char() {
+        return get_string().c_str();
+    }
+
+    char *getChars() {
+        return chars;
+    }
+
+    int getLength() {
+        return length;
+    }
+
+};
+
+
+monoString* new_il2cpp_string(const char * cstr){
+    monoString *(*CreateIl2CppString_t)(const char *);
+    do {
+        CreateIl2CppString_t = (monoString *(*)(const char *)) dlsym(get_il2cpp(), "il2cpp_string_new_wrapper");
+    } while (!CreateIl2CppString_t);
+    return CreateIl2CppString_t(cstr);
+}
 /*
  * This method was decompiled and recreated from Unity Core
  * With IDA Pro PseudoCode.
@@ -166,7 +259,7 @@ float UnityEngine_Vector3__Distance(
 
 void (*IgnoreLayerCollision)(int layer1, int layer2, bool ignore);
 void (*old_Transform_LookAt)(void *instance, void *target);
-
+void *(*Instantiate)(void*, Vector3 pos, Quaternion rot);
 void (*set_useGravity)(void*, bool value);
 void* (*il2cpp_resolve_icall_0)(const char *);
 void* (*il2cpp_type_get_object)( void * type);
@@ -235,11 +328,46 @@ void *Camera_main(){
     }
     return result();
 }
+void SetFrameRateLimit(int v){
+    void (*result)(int);
+    if(!il2cpp_resolve_icall_0){
+        return;
+    }
+    result = (void (*)(int))il2cpp_getMethod("UnityEngine.Application::set_targetFrameRate(System.Int32)");
+    if(result == nullptr){
+        return;
+    }
+    return result(v);
+}
+void SetFOG(bool v){
+    void (*result)(bool);
+    if(!il2cpp_resolve_icall_0){
+        return;
+    }
+    result = (void (*)(bool))il2cpp_getMethod("UnityEngine.RenderSettings::set_fog(System.Boolean)");
+    if(result == nullptr){
+        return;
+    }
+    return result(v);
+}
+void SetFOGDist(float v){
+    void (*result)(float);
+    if(!il2cpp_resolve_icall_0){
+        return;
+    }
+    result = (void (*)(float))il2cpp_getMethod("UnityEngine.RenderSettings::set_fogEndDistance(System.Single)");
+    if(result == nullptr){
+        return;
+    }
+    return result(v);
+}
 void (*Destroy)(void* obj);
+void (*SetApplicationAvg)(int val); //2000 - no limit //Method Signature: UnityEngine.Application::set_targetFrameRate(System.Int32)
 void (*SetActive)(void*,bool value);
 void *(*StartCoroutine)(void * t, void *);
 void *(*get_gameObject)(void * t);
 void (*SetQualityLevel)(int, bool);
+void *(*LoadScene)(monoString*);
 void *(*get_transform)(void * t);
 Vector3 (*get_forward)(void * t);
 Vector3 (*get_right)(void * t);
@@ -483,7 +611,7 @@ void SlendrinaESP(void * slend, void * player){
             Vector3 fm = WorldToScreenPoint(Camera_main(), cposG);
             if (fm.z <= 1.0f){
                 return;
-            }//  проверка чтоб не рисовало за экраном
+            } //  проверка чтоб не рисовало за экраном
 
             //enemy->screenPosition = ImVec2(-999, -999);
             enemy->distance = UnityEngine_Vector3__Distance(cpos, cposG);
@@ -499,8 +627,66 @@ void FPSControllerNEW_FixedUpdate(void *instance) {
     if(instance == nullptr){
         return;
     }
+
+    void *player = *(void **) ((uint64_t) instance + 0x80); //Объект игрока
     void *granny = *(void **) ((uint64_t) instance + 0xA0); //Объект бабки)
+    void *grandpa = *(void **) ((uint64_t) instance + 0xA4); //Объект деда) )
+
+   if(player){
+       void *plyrTransform = get_transform(player);
+       if (plyrTransform) {
+           Vector3 posn = get_pos(plyrTransform);
+           if (teleportCrdCommit) {
+               LOGI("Wanna to move player");
+               posn.x = playerPosTp[0];
+               posn.y = playerPosTp[1];
+               posn.z = playerPosTp[2];
+               set_pos(plyrTransform, posn);
+               teleportCrdCommit = false;
+           }
+           if(teleportPlaceCommit){
+               Vector3 target = Vector3(0.0f, 0.0f, 0.0f);
+               switch(placetoteleport){
+                   case 0:
+                       target.x = 10.810f;
+                       target.y = -5.538;
+                       target.z = 17.600;
+                   break;
+                   case 1:
+                       target.x = 11.810001f;
+                       target.y = -12.538391;
+                       target.z = 17.600;
+                       break;
+                   case 2:
+                       target.x = 0.522f;
+                       target.y = 5;
+                       target.z = 40;
+                       break;
+                   case 3:
+                       target.x = 22.889f;
+                       target.y = -16.162;
+                       target.z = -0.053;
+                       break;
+                   case 4:
+                       target.x = -8.307f;
+                       target.y = 14.511;
+                       target.z = 2.444;
+                       break;
+               }
+               set_pos(plyrTransform, target);
+               teleportPlaceCommit = false;
+           }
+           playerPos[0] = posn.x;
+           playerPos[1] = posn.y;
+           playerPos[2] = posn.z;
+           playerPosTp[0] = posn.x;
+           playerPosTp[1] = posn.y;
+           playerPosTp[2] = posn.z;
+       }
+   }
+
     Enemy* enemy = EnemyEditor.enemies[0];
+    Enemy* enemy1 = EnemyEditor.enemies[1];
     if(enemy){
         if(enemy->setActive){
             if(granny){
@@ -508,10 +694,82 @@ void FPSControllerNEW_FixedUpdate(void *instance) {
             }
             enemy->setActive = false;
         }
-    }
 
-    void *player = *(void **) ((uint64_t) instance + 0x80); //Объект игрока
-    void *grandpa = *(void **) ((uint64_t) instance + 0xA4); //Объект деда) )
+        if(enemy->tpEnemy2Me){
+            if(player){
+                LOGW("Very Cool that player is found");
+                if( granny){
+                    LOGW("Very Cool that Granny found");
+                    void*Granny_transform = get_transform(granny);
+                    void*Player_transform = get_transform(player);
+                    if(Granny_transform){
+                        LOGW("Why it not teleport to me then");
+                        set_pos(Player_transform,get_pos(Granny_transform));
+                    }
+                }
+
+            }
+            enemy->tpEnemy2Me = false;
+        }
+        if(enemy->tpMe2Enemy){
+
+            if(player){
+
+                if(granny){
+                    void*Granny_transform = get_transform(granny);
+                     void*Player_transform = get_transform(player);
+                    if(Granny_transform){
+                        set_pos(Player_transform,get_pos(Granny_transform));
+                    }
+
+                }
+            }
+            enemy->tpMe2Enemy = false;
+        }
+    }
+    if(enemy1){
+        if(enemy1->setActive){
+            if(grandpa){
+                SetActive(grandpa, enemy1->active);
+            }
+            enemy1->setActive = false;
+        }
+
+        if(enemy1->tpEnemy2Me){
+            if(player){
+                LOGW("Very Cool that player is found");
+                if( grandpa){
+                    LOGW("Very Cool that Granny found");
+                    void*Granny_transform = get_transform(grandpa);
+                    void*Player_transform = get_transform(player);
+                    if(Granny_transform){
+                        LOGW("Why it not teleport to me then");
+                        set_pos(Player_transform,get_pos(Granny_transform));
+                    }
+                }
+
+            }
+            enemy1->tpEnemy2Me = false;
+        }
+        if(enemy1->tpMe2Enemy){
+
+            if(player){
+
+                if(grandpa){
+                    void*Granny_transform = get_transform(grandpa);
+                    void*Player_transform = get_transform(player);
+                    if(Granny_transform){
+                        set_pos(Player_transform,get_pos(Granny_transform));
+                    }
+                }
+            }
+            enemy1->tpMe2Enemy = false;
+        }
+    }
+    if(teleportPlaceCommit){
+        LOGD("Commit Teleport Place: %d", placetoteleport)
+        teleportPlaceCommit = false;
+    }
     if(changeForwSpeed){
         *(float*) ((uint64_t) instance + 0x1C) = frSpeed;
         changeForwSpeed = false;
@@ -527,53 +785,23 @@ void FPSControllerNEW_FixedUpdate(void *instance) {
     if(granny != nullptr){
         Vector3 cpos = get_pos(get_transform((player)));
         Vector3 cposG = get_pos(get_transform((granny)));
-        if(UnityEngine_Vector3__Distance(cpos, cposG) <= 5){
-
-        }
+        if(UnityEngine_Vector3__Distance(cpos, cposG) <= 5){}
     }
     if(ESP.ESP){
         GrannyESP(granny, player);
         GrandpaESP(grandpa, player);
-       // SlendrinaESP(slendrina, player);
     }
-
-
     old_FPSControllerNEW_FixedUpdate(instance); //Вызвать функцию игры
-    if(!fly && igncol) {
-        void *joystick = *(void **) ((uint64_t) instance + 0x10); //Объект джойстика
-        float forwardSpeed = *(float*) ((uint64_t) instance + 0x1C);
-        float backwardSpeed = *(float*) ((uint64_t) instance + 0x20);
-        Vec2 inputDickk_BackingField = *(Vec2 *) ((uint64_t) joystick + 0x14);
-        float x = inputDickk_BackingField.x; //кодината X - влево/вправо
-        float y = inputDickk_BackingField.y; //кодината Y - вверх/вниз
-        void *cam = Camera_main(); //Камера игрока
-        if (x != 0) {
-            float nocSpeedRatio = (x < 0 ? backwardSpeed : forwardSpeed);
-            Vector3 playerPosition = get_pos(
-                    get_transform(player)); ///сначала просто получаем координаты игрока
-          Vector3 addition;
-            addition = get_right(get_transform(get_gameObject(cam))) * (x/1);
-            addition.y = 0;
-            playerPosition = playerPosition + addition; //новая позиция игрока ///наш Vector3 равный позиции игрока изменен
-            playerPosition.y = get_pos(
-                   get_transform(player)).y;
-
-            set_pos(get_transform(player), playerPosition); //теперь игрок на новой позиции
+    if(savePlayerY){
+        if(player){
+            playerY = get_pos(get_transform(get_gameObject(player))).y;
         }
-
-        if (y != 0) {
-            float nocSpeedRatio = (y < 0 ? backwardSpeed : forwardSpeed);
-            Vector3 playerPosition = get_pos(
-                    get_transform(player)); ///сначала просто получаем координаты игрока
-            Vector3 addition;
-            addition = get_forward(get_transform(get_gameObject(cam))) * (y/1 );
-            addition.y = 0;
-            playerPosition = playerPosition +  addition; //новая позиция игрока ///наш Vector3 равный позиции игрока изменен
-            playerPosition.y = get_pos(
-                    get_transform(player)).y;
-            set_pos(get_transform(player), playerPosition); //теперь игрок на новой позиции
-        }
-        return;
+        savePlayerY = false;
+    }
+    if(igncol && playerY != 0){
+        Vector3 freezeYPos = get_pos(get_transform(player));
+        freezeYPos.y = playerY;
+        set_pos(get_transform(player), freezeYPos);
     }
   if(fly) {
 
@@ -589,7 +817,7 @@ void FPSControllerNEW_FixedUpdate(void *instance) {
             float nocSpeedRatio = (x < 0 ? backwardSpeed : forwardSpeed);
             Vector3 playerPosition = get_pos(
                     get_transform(player)); ///сначала просто получаем координаты игрока
-            playerPosition = playerPosition + get_right(get_transform(get_gameObject(cam))) * (x/nocSpeedRatio); //новая позиция игрока ///наш Vector3 равный позиции игрока изменен
+            playerPosition = playerPosition + get_right(get_transform(get_gameObject(cam))) * (x); //новая позиция игрока ///наш Vector3 равный позиции игрока изменен
             set_pos(get_transform(player), playerPosition); //теперь игрок на новой позиции
         }
 
@@ -597,7 +825,7 @@ void FPSControllerNEW_FixedUpdate(void *instance) {
             float nocSpeedRatio = (y < 0 ? backwardSpeed : forwardSpeed);
             Vector3 playerPosition = get_pos(
                     get_transform(player)); ///сначала просто получаем координаты игрока
-            playerPosition = playerPosition +  get_forward(get_transform(get_gameObject(cam))) * (y/nocSpeedRatio ); //новая позиция игрока ///наш Vector3 равный позиции игрока изменен
+            playerPosition = playerPosition +  get_forward(get_transform(get_gameObject(cam))) * (y); //новая позиция игрока ///наш Vector3 равный позиции игрока изменен
             set_pos(get_transform(player), playerPosition); //теперь игрок на новой позиции
         }
     }
@@ -651,41 +879,14 @@ void Granny_FixedUpdate(void *instance) {
            StartCoroutine(instance, old_EnemyAIGranny_PC(instance));
            enemy->enemyKillPlayer = false;
        }
-        if(enemy->tpEnemy2Me){
-             void*Player = *(void* *) ((uint64_t) instance + 0x60);
-             if(Player){
-                 void*Granny = get_gameObject(instance);
-                 if(Granny){
-                     void*Granny_transform = get_transform(Granny);
-                     if(Granny_transform){
-                         set_pos(Player,get_pos(Granny_transform));
-                     }
 
-                 }
-             }
-            enemy->tpEnemy2Me = false;
-        }
-        if(enemy->tpMe2Enemy){
-            void*Player = *(void* *) ((uint64_t) instance + 0x60);
-            if(Player){
-                void*Granny = get_gameObject(instance);
-                if(Granny){
-                    void*Granny_transform = get_transform(Granny);
-                    void*Player_transform = get_transform(Player);
-                    if(Granny_transform){
-                        set_pos(Granny,get_pos(Player_transform));
-                    }
-
-                }
-            }
-            enemy->tpMe2Enemy = false;
-        }
 
         if(enemy->destroy){
 
             void*Granny = get_gameObject(instance);
             if(Granny){
                Destroy(Granny);
+                enemy->destroyed = true;
             }
             enemy->destroy = false;
         }
@@ -697,13 +898,6 @@ void Granny_FixedUpdate(void *instance) {
         old_Granny_FixedUpdate(instance);
 
 }
-void ozHookSym(void *pVoid, void *pVoid1, void **pVoid2) {
-    hookCount++;
-
-    MSHookFunction(pVoid, pVoid1, pVoid2);
-}
-
-
 void * eglHandle;
 void *get_EGL() {
     void *mod = 0;
@@ -744,95 +938,55 @@ bool chamsSlendrina;
 void (*old_glDrawElements)(GLenum mode, GLsizei count, GLenum type, const void *indices);
 void new_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void *indices) {
     old_glDrawElements(mode, count, type, indices);
-
-    if(((count < 2123 || count > 3000) && chamsSlendrina) && !wireframe && !clrfilter){
+    if(((count < 2123 || count > 3000) /* Slendrina macros*/ && chamsSlendrina) && !wireframe && !clrfilter && mode == GL_TRIANGLES){
         return;
     }
-
- //   LOGE("Count of indicies of glDrawElements: %d", count);
-        if (clrfilter) {
-
-            glDepthRangef(1, 0.5);
-            glColorMask(5,0,0,0);
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-
-        }
     if (wireframe || chamsSlendrina) {
-
         mode = GL_LINES;
         glLineWidth(wfLW);
         glDepthRangef(1, 0.5);
         glColorMask(1, 0, 0, 0);
         glEnable(GL_BLEND);
+        glDisable(GL_TEXTURE_3D);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     }
-
+         //restore gl state
         if(wireframe || clrfilter || chamsSlendrina){
             old_glDrawElements(mode, count, type, indices);
-
-
             glDepthRangef(0.5, 1);
-
             glColorMask(1, 1, 1, 1);
             glDisable(GL_BLEND);
-
-
         }
-
-
 }
 void Wireframe(){
     auto p_glDrawElements = (const void*(*)(...))dlsym(glHandle, "glDrawElements");
     const char *dlsym_error = dlerror();
     if(dlsym_error){
-        LOGE("Cannot load symbol 'glDrawElements': %s", dlsym_error);
+        LOGE("Cannot load symbol 'glDrawElements': %s", dlsym_error)
         return;
     }else{
-        MSHookFunction(reinterpret_cast<void*>(p_glDrawElements), reinterpret_cast<void*>(new_glDrawElements), reinterpret_cast<void**>(&old_glDrawElements));
+        DobbyHook((void*)(p_glDrawElements), (void*)(new_glDrawElements), (void**)(&old_glDrawElements));
     }
-}
-EGLAPI EGLBoolean EGLAPIENTRY (*old_eglSwapBuffers) (EGLDisplay dpy, EGLSurface surface);
-EGLAPI EGLBoolean EGLAPIENTRY new_eglSwapBuffers (EGLDisplay dpy, EGLSurface surface) {
-    Render();
-    if(!old_eglSwapBuffers(dpy, surface)){
-        return false;
-    }
-    return true;
-}
-int32_t (*old_ANativeWindow_getWidth)(ANativeWindow* window);
-int32_t new_ANativeWindow_getWidth(ANativeWindow* window){
-    int32_t returnValue = old_ANativeWindow_getWidth(window);
-    LOGI("I know that screen width is %d", returnValue);
-    screenWidth = returnValue;
-    return returnValue;
 }
 
-int32_t (*old_ANativeWindow_getHeight)(ANativeWindow* window);
-int32_t new_ANativeWindow_getHeight(ANativeWindow* window){
-    int32_t returnValue = old_ANativeWindow_getHeight(window);
-    LOGI("I know that screen height is %d", returnValue);
-    screenHeight = returnValue;
-    return returnValue;
-}
+
 void ImGuiImpl(bool swapbuffers = true){
+
     startTime = currentTimeInMilliseconds();
     screenWidth = 2340;
     screenHeight = 1080;
     setupGraphics( screenWidth, screenHeight);
-    if(swapbuffers){
+    if(swapbuffers){/*
         auto swapBuffersSym = (const void*(*)(...))dlsym(eglHandle, "eglSwapBuffers");
         const char *dlsym_error = dlerror();
         if(dlsym_error){
             LOGE("Cannot load symbol 'eglSwapBuffers': %s", dlsym_error);
             return;
-        }else{
-            MSHookFunction(reinterpret_cast<void*>(swapBuffersSym), reinterpret_cast<void*>(new_eglSwapBuffers), reinterpret_cast<void**>(&old_eglSwapBuffers));
-        }
+        }else{*/
+
+        //}
     }
 
-        MSHookFunction((void*)(ANativeWindow_getWidth), (void*)(new_ANativeWindow_getWidth), (void**)(&old_ANativeWindow_getWidth));
-    MSHookFunction((void*)(ANativeWindow_getHeight), (void*)(new_ANativeWindow_getHeight), (void**)(&old_ANativeWindow_getHeight));
 
 }
 
@@ -841,16 +995,65 @@ int (*old_DiffDataInvis)(void * , int );
 int DiffDataInvis(void * , int ){
     return 4;
 }
+void (*old_glStencilMask)();
+void new_glStencilMask(){
+//glClearStencil
+    LOGI("Render: glStencilMask (dobby!!)")
+    if(renderFunction == 1){
+        Render();
+    }
+}
+void (*old_glClear)(GLuint);
+void new_glClear(GLuint mask){
+//glClearStencil
+    LOGI("Render: glClear (dobby!!)")
+    if(!dontClear){
+        old_glClear(mask);
+    }
+    if(renderFunction == 3){
+        Render();
+    }
+}
+void (*old_signleGLFunc)();
+void new_signleGLFunc(){
+//glClearStencil
+    LOGI("Render: glRenderbufferStorage (dobby!!)")
+}
+void ImGui_ImplOpenGLHook(){
+    void* stencilSym = dlsym(glHandle, "glStencilMask");
+    const char *dlsym_error3 = dlerror();
+    if(dlsym_error3){
+        LOGE("Cannot load symbol 'glStencilMask': %s", dlsym_error3);
+    }else {
+        DobbyHook((stencilSym), (void*)(new_glStencilMask), (void**)(&old_glStencilMask));
+    }
+
+    void* glClearSym = dlsym(glHandle, "glClear"); //glDrawBuffers
+    const char *dlsym_error4 = dlerror();
+    if(dlsym_error4){
+        LOGE("Cannot load symbol 'glClear': %s", dlsym_error4)
+    }else {
+        DobbyHook((glClearSym), (void*)(new_glClear), (void**)(&old_glClear));
+    }
+}
+//tried
+//gl blend equation - not use
+//gl depth - bug
+//gl clear stencil - behind uui
+//gl stencil mask - behind uui
+//gl stencil op -- not use
+//gl stencil mask seperate - not in use alssooo
+//gl draw buffers - behind uui but only in game
 void HookMods(){
     selectedEnemyObj = EnemyEditor.enemies[0];
-   // LogShaders();
+    ImGui_ImplOpenGLHook();
     Wireframe();
     //Initialize IL2CPP Methods to non-offset use.
     il2cpp_resolve_icall_0 = (void*(*)(const char *)) dlsym(get_il2cpp(), "il2cpp_resolve_icall");
 
-    const char *dlsym_error = dlerror();
-    if(dlsym_error){
-        LOGE("Cannot load symbol 'il2cpp_resolve_icall_0': %s. Using offset instead", dlsym_error);
+    const char *dlsym_error2 = dlerror();
+    if(dlsym_error2){
+        LOGE("Cannot load symbol 'il2cpp_resolve_icall_0': %s. Using offset instead", dlsym_error2);
         /*
          * If there is a dlsym error, its means the device is trying to search other method (Example: Bluestacks 5)
          * So we use offset for it instead.
@@ -858,42 +1061,44 @@ void HookMods(){
          * Not
          * il2cpp_resolve_icall_0 = (void*(*)(const char *)) dlsym(get_il2cpp(), "il2cpp_resolve_icall");
          * Just
-         *    il2cpp_resolve_icall_0 = (void*(*)(const char *)) getAbsoluteAddress(targetLibName, 0x270D94);
+         *    il2cpp_resolve_icall_0 = (void*(*)(const char *)) getRealAddrOfLibrary(targetLibName, 0x270D94);
          *    0x270D94 is offset to il2cpp_resolve_icall_0.
 
          */
-          il2cpp_resolve_icall_0 = (void*(*)(const char *)) getAbsoluteAddress(targetLibName, 0x270D94);
-
+          il2cpp_resolve_icall_0 = (void*(*)(const char *)) getRealAddrOfLibrary(targetLibName,0x270D94);
     }
     //Game Utilities
-    SetQualityLevel= (void(*)(int, bool)) getAbsoluteAddress(targetLibName, 0x94EDC8);
-    SetActive = (void(*)(void*, bool)) getAbsoluteAddress(targetLibName, 0x96A654);
-    Destroy = (void(*)(void*)) getAbsoluteAddress(targetLibName, 0x949864);
-    StartCoroutine = (void*(*)(void*, void*)) getAbsoluteAddress(targetLibName, 0x94820C);
-    WorldToScreenPoint =  (Vector3(*)(void*, Vector3)) getAbsoluteAddress(targetLibName, 0x961F8C);
-     IgnoreLayerCollision =  (void(*)(int,int,bool )) getAbsoluteAddress(targetLibName, 0xD099A4 );
-    get_gameObject  =  (void *(*)(void*)) getAbsoluteAddress(targetLibName, 0x96444C);
-    get_transform  =  (void *(*)(void*)) getAbsoluteAddress(targetLibName, 0x96A55C);
-    get_forward  =  (Vector3(*)(void*)) getAbsoluteAddress(targetLibName, 0xAE0310);
-    get_right  =  (Vector3(*)(void*)) getAbsoluteAddress(targetLibName, 0xADFF38);
-    set_timeScale =  (void (*)(float)) getAbsoluteAddress(targetLibName, 0xADEB1C);
-    set_pos  =  (void(*)(void*, Vector3)) getAbsoluteAddress(targetLibName, 0xADF850);
-    get_pos   =  (Vector3(*)(void*)) getAbsoluteAddress(targetLibName, 0xADF778);
-    set_enabled   =  (void(*)(void*, bool)) getAbsoluteAddress(targetLibName, 0xD08D70);
-      MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x698E44),
+    SetQualityLevel= (void(*)(int, bool)) getRealAddrOfLibrary(targetLibName, 0x94EDC8);
+    SetActive = (void(*)(void*, bool)) getRealAddrOfLibrary(targetLibName, 0x96A654);
+    Destroy = (void(*)(void*)) getRealAddrOfLibrary(targetLibName, 0x949864);
+    StartCoroutine = (void*(*)(void*, void*)) getRealAddrOfLibrary(targetLibName, 0x94820C);
+    WorldToScreenPoint =  (Vector3(*)(void*, Vector3)) getRealAddrOfLibrary(targetLibName,0x961F8C);
+     IgnoreLayerCollision =  (void(*)(int,int,bool )) getRealAddrOfLibrary(targetLibName,0xD099A4);
+    LoadScene = (void*(*)(monoString*)) getRealAddrOfLibrary(targetLibName, 0x95A8D4);
+    get_gameObject  =  (void *(*)(void*)) getRealAddrOfLibrary(targetLibName, 0x96444C);
+    get_transform  =  (void *(*)(void*)) getRealAddrOfLibrary(targetLibName, 0x96A55C);
+    get_forward  =  (Vector3(*)(void*)) getRealAddrOfLibrary(targetLibName, 0xAE0310);
+    get_right  =  (Vector3(*)(void*)) getRealAddrOfLibrary(targetLibName, 0xADFF38);
+    set_timeScale =  (void (*)(float)) getRealAddrOfLibrary(targetLibName, 0xADEB1C);
+    set_pos  =  (void(*)(void*, Vector3)) getRealAddrOfLibrary(targetLibName, 0xADF850);
+    get_pos   =  (Vector3(*)(void*)) getRealAddrOfLibrary(targetLibName, 0xADF778);
+    set_enabled   =  (void(*)(void*, bool)) getRealAddrOfLibrary(targetLibName, 0xD08D70);
+    Instantiate = (void*(*)(void*, Vector3, Quaternion)) getRealAddrOfLibrary(targetLibName, 0x949158);
+      MSHookFunction((void *) getRealAddrOfLibrary(targetLibName, 0x698E44),
                    (void *) BearTrap_OnTriggerEnter, (void **) &old_BearTrap_OnTriggerEnter);
-   MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x5A6664), (void *) EnemyAIGranny_PC,
-                   (void **) &old_EnemyAIGranny_PC);
-    MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x4116CC), (void *) EnemyAIGrandpa_PC,
+   MSHookFunction((void *) getRealAddrOfLibrary(targetLibName, 0x5A6664), (void *) EnemyAIGranny_PC,
+                  (void **) &old_EnemyAIGranny_PC);
+    MSHookFunction((void *) getRealAddrOfLibrary(targetLibName, 0x4116CC), (void *) EnemyAIGrandpa_PC,
                    (void **) &old_EnemyAIGrandpa_PC);
-
-    MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x5A7B24),
+    MSHookFunction((void *) getRealAddrOfLibrary(targetLibName, 0x5CD124), (void *) SetupItemPtrs,
+                   (void **) &old_SetupItemPtrs);
+    MSHookFunction((void *) getRealAddrOfLibrary(targetLibName, 0x5A7B24),
                    (void *) Slendrina_FixedUpdate,
                    (void **) &old_Slendrina_FixedUpdate);
-    MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x59E894),
+    MSHookFunction((void *) getRealAddrOfLibrary(targetLibName, 0x59E894),
                    (void *) Granny_FixedUpdate,
                    (void **) &old_Granny_FixedUpdate);
-    MSHookFunction((void *) getAbsoluteAddress(targetLibName, 0x5AF7F0),
+    MSHookFunction((void *) getRealAddrOfLibrary(targetLibName, 0x5AF7F0),
                    (void *) FPSControllerNEW_FixedUpdate,
                    (void **) &old_FPSControllerNEW_FixedUpdate);
 
@@ -901,48 +1106,31 @@ void HookMods(){
 
 void* thread(void* obj){
     //Initialize ESP Enemies.
-     ESP.Init();
+    ESP.Init();
     EnemyEditor.Init();
     glHandle = get_GL();
     eglHandle = get_EGL();
-    ImGuiImpl(true);
-    LOGI("Lol");
-
+   // ImGuiImpl(true);
     //RequestToast((currentLang == 0 ? OBFUSCATE("Библиотека игры успешно загружена.") : OBFUSCATE("Game Library Is Loaded.")));
     int attempts = 1;
     bool tired = false;
     do {
         sleep(1);
         if(attempts == 10){
-       //     RequestToast((currentLang == 0 ? ("Ошибка при загрузке библиотеки игры. Функции могут не работать или работать неправильно.") : OBFUSCATE("Unable to load Game Library. Menu FeaturesStates can work incorectly.")));
+
         }
         if(attempts == 100) {
-     //       RequestToast((currentLang == 0 ? (
-       //             "Количество попыток загрузки библиотеки игры преввысило 100. Не вижу смысла ожидать.")
-      //                                     : (
-      //                      "Unable to load Game Library. Attempts is >= 100. Stopping Thread.")));
-
             pthread_exit(NULL);
         }
         attempts++;
     } while (!isLibraryLoaded(targetLibName) && true);
-    sleep(2); // Il2cpp can be not initialized
+  sleep(3);
+  HookMods();
 
-    //RequestToast((currentLang == 0 ? ("Библиотека игры успешно загружена.") : ("Game Library Is Loaded.")));
-    sleep(3);
-    try {
-
-        HookMods();
-    } catch (void*e) {
-        int err = attempts + 5 + hookCount;
-      //  RequestToast((currentLang == 0 ?  std::string(std::string(("Неизвестная ошибка: ")) + std::to_string(err)).c_str() : std::string(std::string(("Unknown Error: ")) + std::to_string(err)).c_str()));
-
-    }
     return nullptr;
 }
 
 void ozME_StartThread(){
-
     pthread_t ptid;
     pthread_create(&ptid, NULL, thread, NULL);
 }
