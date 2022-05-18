@@ -21,28 +21,12 @@
 
 # Recomendations
 
-1. Use it in Android Studio to better effect. If you are using AIDE and having issues then don't write to issues. I will not repond to theese issues and close it.
-2. Please Rename lib name with CMakeLists.txt
+1. This is the old project. If you really need to understand and build it, then do it by yourself, this project is no longer maintained.
+2. 
 
 # Used to create
 
-Obfuscate by Adam Yaxley
-
-GLSurfaceView
-
-OpenGL (OpenGL Emscripten v2)
-
-EGL
-
-Il2cpp Dumper
-
-dnSpy
-
-Cydia Substrade
-
-Dobby
-
-JNI
+OpenGL (GLESv2), EGL
 
 
-If i'm not mentionied someone else who helped/contributed to that project, just contact me.
+
